@@ -1,0 +1,20 @@
+{
+    "name": "pintos-dev-clion",
+    // VSCode와 같은 Pintos 개발 이미지를 쓰기 위해 루트 Dev Container Dockerfile을 공유합니다.
+    "build": {
+        "dockerfile": "../Dockerfile",
+        "context": "../.."
+    },
+    "remoteUser": "jungle",
+
+    // CLion에서도 기존 activate 경로를 그대로 쓰기 위해 workspace 경로를 고정합니다.
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/pintos_22.04_lab_docker,type=bind",
+    "workspaceFolder": "/workspaces/pintos_22.04_lab_docker",
+
+    "customizations": {
+        "jetbrains": {
+            // JetBrains Dev Containers가 CLion backend를 실행하도록 지정합니다.
+            "backend": "CLion"
+        }
+    }
+}
