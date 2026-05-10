@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "threads/vaddr.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -63,10 +64,20 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: Fill this function. */
+	/*
+		주어진 supplemental page table에서 va에 해당하는 struct page를 찾는다.
+		찾지 못하면 NULL을 return한다.
 
-	return page;
+		hash_find() 함수를 사용할 것 같은데
+		인자로는 (struct hash *h, struct hash_elem *e) 다음과 같이 들어간다.
+	*/
+	struct page p;
+	struct hash_elem *e;
+
+	p.va = pg_round_down(va);
+	e = hash_find(&spt->pages, &p.hash_elem);
+
+	return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -174,6 +185,12 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	/*
+		SPT를 initialize 하는 함수.
+		해당 SPT는 hash 자료구조를 사용하기로 설정해놓았음.
+		그러면 hash table을 init 해야한다.
+	*/
+	hash_init(&spt->pages, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
