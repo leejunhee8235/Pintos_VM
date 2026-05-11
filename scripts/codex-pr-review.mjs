@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import { Octokit } from "@octokit/rest";
-import { execSync } from "node:child_process";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -11,7 +10,8 @@ const octokit = new Octokit({
 });
 
 const [owner, repo] = process.env.REPOSITORY.split("/");
-const pull_number = Number(process.env.PR_NUMBER);
+const pullNumber = Number(process.env.PR_NUMBER);
+const maxDiffChars = 180000;
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY secret is missing.");
@@ -20,35 +20,48 @@ if (!process.env.OPENAI_API_KEY) {
 const { data: pr } = await octokit.pulls.get({
   owner,
   repo,
-  pull_number,
+  pull_number: pullNumber,
 });
 
-execSync(`git fetch origin ${pr.base.ref} --depth=1`, {
-  stdio: "inherit",
+const files = await octokit.paginate(octokit.pulls.listFiles, {
+  owner,
+  repo,
+  pull_number: pullNumber,
+  per_page: 100,
 });
 
-execSync(`git fetch origin pull/${pull_number}/head:pr-${pull_number}`, {
-  stdio: "inherit",
-});
+const diff = files
+  .map((file) => {
+    if (!file.patch) {
+      return [
+        `diff --git a/${file.filename} b/${file.filename}`,
+        `# status: ${file.status}`,
+        "# patch is unavailable, possibly because the file is binary or too large",
+      ].join("\n");
+    }
 
-execSync(`git checkout pr-${pull_number}`, {
-  stdio: "inherit",
-});
-
-const diff = execSync(`git diff --unified=80 origin/${pr.base.ref}...HEAD`, {
-  encoding: "utf8",
-  maxBuffer: 20 * 1024 * 1024,
-});
+    return [
+      `diff --git a/${file.filename} b/${file.filename}`,
+      `# status: ${file.status}`,
+      file.patch,
+    ].join("\n");
+  })
+  .join("\n\n");
 
 if (!diff.trim()) {
   await octokit.issues.createComment({
     owner,
     repo,
-    issue_number: pull_number,
+    issue_number: pullNumber,
     body: "Codex review: 변경된 diff가 없습니다.",
   });
   process.exit(0);
 }
+
+const truncatedDiff =
+  diff.length > maxDiffChars
+    ? `${diff.slice(0, maxDiffChars)}\n\n# Diff was truncated because the PR is large.`
+    : diff;
 
 const response = await openai.responses.create({
   model: "gpt-5.2-codex",
@@ -83,7 +96,17 @@ PR diff를 보고 실제 문제가 될 수 있는 것만 리뷰한다.
     },
     {
       role: "user",
-      content: `다음 GitHub PR diff를 리뷰해줘:\n\n${diff}`,
+      content: `PR 제목: ${pr.title}
+PR 작성자: ${pr.user.login}
+PR 대상 브랜치: ${pr.base.ref}
+PR 소스 브랜치: ${pr.head.ref}
+
+사용자 요청 댓글:
+${process.env.COMMENT_BODY || "(없음)"}
+
+다음 GitHub PR diff를 리뷰해줘:
+
+${truncatedDiff}`,
     },
   ],
 });
@@ -96,6 +119,6 @@ ${response.output_text}
 await octokit.issues.createComment({
   owner,
   repo,
-  issue_number: pull_number,
+  issue_number: pullNumber,
   body: reviewBody,
 });

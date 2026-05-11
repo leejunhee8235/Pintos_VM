@@ -6,21 +6,19 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
   issues: write
 
 jobs:
   review:
     if: >
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@codex review')
+      contains(github.event.comment.body, '/ai-review')
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR branch
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,4 +34,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: node scripts/codex-pr-review.mjs
