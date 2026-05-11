@@ -12,6 +12,9 @@
 #include "vm/vm.h"
 #endif
 
+#define VM
+#define USERPROG
+
 struct file;
 
 /* 스레드 수명 주기의 상태입니다. */

@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -110,8 +111,20 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
-	/* TODO: Fill this function. */
+	struct frame* frame = NULL;
+	void* kvaddr = palloc_get_page(PAL_USER | PAL_ZERO);
+	if( kvaddr == NULL )
+	{
+		return NULL;
+	}
+	frame = (struct frame*)malloc(sizeof(struct frame));
+	if(frame == NULL)
+	{
+		palloc_free_page(kvaddr);
+		return NULL;
+	}
+	frame->kva = kvaddr;
+	frame->page = NULL;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -150,9 +163,15 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
+	void* vas = pg_round_down(va);
+	struct supplemental_page_table* new_spt = &thread_current()->spt;
+	page = spt_find_page(new_spt, vas);
+	if(page == NULL)
+	{
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
@@ -161,11 +180,22 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
-
-	/* Set links */
+	if (frame == NULL)
+	{
+		return false;
+	}
 	frame->page = page;
 	page->frame = frame;
-
+	bool success = pml4_set_page(thread_current()->pml4, page->va, frame->kva, true);
+	if(!success)
+	{
+		page->frame = NULL;
+    	frame->page = NULL;
+		pml4_clear_page(thread_current()->pml4, page->va);
+		palloc_free_page(frame->kva);
+		free(frame);
+		return false;	
+	}
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 
 	return swap_in (page, frame->kva);
