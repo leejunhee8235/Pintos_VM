@@ -1,6 +1,7 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
+#include "threads/mmu.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
@@ -144,12 +145,26 @@ vm_evict_frame (void) {
 /* palloc() and get frame. If there is no available page, evict the page
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
- * space.*/
+ * space.
+
+*/
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
+	/* frame 메타데이터를 먼저 만들고, 실제 내용을 담을 4KB user pool
+	 * 페이지를 frame->kva에 연결한다. */
+	frame = malloc(sizeof *frame);
+	if (frame == NULL) {
+		return NULL;
+	}
+	frame->kva = palloc_get_page(PAL_USER);
+	if (frame->kva == NULL) {
+		free(frame);
+		return NULL;
+	}
 	
+	frame->page = NULL;
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
@@ -187,9 +202,16 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
+
+	/* V1의 SPT 조회를 사용한다. va는 page 중간 주소일 수 있으므로
+	 * spt_find_page()가 page 시작 주소로 내려서 등록된 page를 찾아야 한다. */
+	page = spt_find_page(&thread_current ()-> spt, va);
+	if (page == NULL) {
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
@@ -198,14 +220,40 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
+	struct thread *t = thread_current();
+	
+	if (frame == NULL)
+		return false;
 
-	/* Set links */
+	/* Set links TODO: Fill this function */
+	/* 이 연결은 VM 내부 관리용이다. user code가 page->va로 접근하려면
+	 * 아래에서 pml4 매핑까지 등록해야 한다. */
 	frame->page = page;
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	/* TODO: V1에서 struct page에 writable을 저장하면 page->writable로
+	 * 교체해야 한다. */
+	if (!pml4_set_page(t->pml4, page->va, frame->kva, page->writable)) {
+		page->frame = NULL;
+		frame->page = NULL;
+		palloc_free_page(frame->kva);
+		free(frame);
+		return false;
+	}
 
-	return swap_in (page, frame->kva);
+	/* swap_in은 "이 frame에 page 내용을 채우는" 공통 hook이다.
+	 * uninit은 initializer 실행, anon은 swap/zero-fill, file은 파일 읽기를 한다. */
+	if (!swap_in (page, frame->kva)) {
+		pml4_clear_page(t->pml4, page->va);
+		page->frame = NULL;
+		frame->page = NULL;
+		palloc_free_page(frame->kva);
+		free(frame);
+		return false;
+	}
+
+	return true;
 }
 
 /* Initialize new supplemental page table */
