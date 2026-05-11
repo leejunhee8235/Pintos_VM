@@ -11,7 +11,7 @@ const octokit = new Octokit({
 });
 
 const [owner, repo] = process.env.REPOSITORY.split("/");
-const pullNumber = Number(process.env.PR_NUMBER);
+const pull_number = Number(process.env.PR_NUMBER);
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY secret is missing.");
@@ -20,22 +20,22 @@ if (!process.env.OPENAI_API_KEY) {
 const { data: pr } = await octokit.pulls.get({
   owner,
   repo,
-  pull_number: pullNumber,
+  pull_number,
 });
 
-execSync(`git fetch origin ${pr.base.ref}:refs/remotes/origin/${pr.base.ref}`, {
+execSync(`git fetch origin ${pr.base.ref} --depth=1`, {
   stdio: "inherit",
 });
 
-execSync(`git fetch origin pull/${pullNumber}/head:pr-${pullNumber}`, {
+execSync(`git fetch origin pull/${pull_number}/head:pr-${pull_number}`, {
   stdio: "inherit",
 });
 
-execSync(`git checkout pr-${pullNumber}`, {
+execSync(`git checkout pr-${pull_number}`, {
   stdio: "inherit",
 });
 
-const diff = execSync(`git diff --unified=80 origin/${pr.base.ref} HEAD`, {
+const diff = execSync(`git diff --unified=80 origin/${pr.base.ref}...HEAD`, {
   encoding: "utf8",
   maxBuffer: 20 * 1024 * 1024,
 });
@@ -44,7 +44,7 @@ if (!diff.trim()) {
   await octokit.issues.createComment({
     owner,
     repo,
-    issue_number: pullNumber,
+    issue_number: pull_number,
     body: "Codex review: 변경된 diff가 없습니다.",
   });
   process.exit(0);
@@ -96,6 +96,6 @@ ${response.output_text}
 await octokit.issues.createComment({
   owner,
   repo,
-  issue_number: pullNumber,
+  issue_number: pull_number,
   body: reviewBody,
 });
