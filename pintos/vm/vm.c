@@ -242,7 +242,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 /*
 	gitbook hash 페이지 참조
 */
-unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED){
+uint64_t page_hash(const struct hash_elem *p_, void *aux UNUSED){
 	const struct page *p = hash_entry(p_, struct page, hash_elem);
 	return hash_bytes(&p->va, sizeof p->va);
 }
