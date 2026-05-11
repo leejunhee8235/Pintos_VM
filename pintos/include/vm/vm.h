@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -44,7 +45,13 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-
+	/*
+		hash table에 넣고 싶은 구조체 안에 struct hash_elem member를 포함시키세요.
+		struct hash와 마찬가지로 struct hash_elem도 opaque입니다.
+		hash table element를 다루는 모든 함수는 실제 element type의 pointer가 아니라 struct hash_elem *을 받고 반환합니다.
+	*/
+	struct hash_elem hash_elem;
+	bool writable;
 	/* Your implementation */
 
 	/* Per-type data are binded into the union.
@@ -85,6 +92,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash pages;
 };
 
 #include "threads/thread.h"
@@ -109,4 +117,10 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
-#endif  /* VM_VM_H */
+/*
+	hash_init() 할 때 필요한 함수들 선언
+*/
+uint64_t page_hash(const struct hash_elem *p_, void *aux UNUSED);
+bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
+
+#endif /* VM_VM_H */
