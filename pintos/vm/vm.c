@@ -74,7 +74,20 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page p;
 	struct hash_elem *e;
 
+	printf("[디버그] va = %p\n", va);
 	p.va = pg_round_down(va);
+	printf("[디버그] after va = %p\n", p.va);
+	/*
+		&spt->pages 에서, 
+		즉 해당 프로세스가 가지고 있는 spt에서 
+		page의 elem과 같은 elem을 찾는다.
+
+		AI 답변
+		=> page의 elem과 같은 elem을 찾는다기보다, hash_find()가 내부적으로
+		p와 같은 기준의 page를 찾는것이다.
+		p와 같은 기준? => p -> va
+		hash_elem을 통해서, 같은키(va)를 가진 page를 찾는다.
+	*/
 	e = hash_find(&spt->pages, &p.hash_elem);
 
 	return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
@@ -84,8 +97,27 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
+	/*
+		주어진 SPT에 인자로 주어진 page를 insert 한다.
+		va가 이미 spt안에 존재하는지 여부를 확인해야 한다.
+	*/
+	/*
+		hash_insert() 함수 사용
+		: hash에서 element와 같은 element를 찾습니다.
+		같은 element가 없으면 element를 hash table에 insert하고 null pointer를 반환합니다.
+		이미 같은 element가 있으면 hash table을 수정하지 않고 기존 element를 반환합니다.
+
+		hash_insert() 내부에 중복 elem 체크를 하는건가?
+	*/
 	int succ = false;
-	/* TODO: Fill this function. */
+	struct hash_elem *e = hash_insert(&spt->pages, &page->hash_elem);
+	/*
+		hash_insert()의 반환값이 null 이면 insert에 성공했다 라는 의미
+		null 이 아니면 기존의 elem을 반환함 => insert에 실패함
+	*/
+	if(e == NULL){
+		succ = true;
+	}
 
 	return succ;
 }
@@ -190,7 +222,10 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 		해당 SPT는 hash 자료구조를 사용하기로 설정해놓았음.
 		그러면 hash table을 init 해야한다.
 	*/
+	printf("[디버그] spt=%p, &spt->pages=%p\n", spt, &spt->pages);
 	hash_init(&spt->pages, page_hash, page_less, NULL);
+	printf("[디버그] after init: empty=%d, size=%zu\n",
+		   hash_empty(&spt->pages), hash_size(&spt->pages));
 }
 
 /* Copy supplemental page table from src to dst */
