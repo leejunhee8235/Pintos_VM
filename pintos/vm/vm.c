@@ -74,9 +74,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page p;
 	struct hash_elem *e;
 
-	printf("[디버그] va = %p\n", va);
 	p.va = pg_round_down(va);
-	printf("[디버그] after va = %p\n", p.va);
 	/*
 		&spt->pages 에서, 
 		즉 해당 프로세스가 가지고 있는 spt에서 
@@ -222,16 +220,20 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 		해당 SPT는 hash 자료구조를 사용하기로 설정해놓았음.
 		그러면 hash table을 init 해야한다.
 	*/
-	printf("[디버그] spt=%p, &spt->pages=%p\n", spt, &spt->pages);
 	hash_init(&spt->pages, page_hash, page_less, NULL);
-	printf("[디버그] after init: empty=%d, size=%zu\n",
-		   hash_empty(&spt->pages), hash_size(&spt->pages));
 }
 
 /* Copy supplemental page table from src to dst */
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	/*
+		src의 supplemental page table을 dst로 copy합니다.
+		child가 parent의 execution context를 상속해야 할 때, 즉 fork()에서 사용됩니다.
+		src의 supplemental page table에 있는 각 page를 순회하면서,
+		그 entry의 정확한 copy를 dst의 supplemental page table에 만들어야 합니다.
+		uninit page를 allocate하고, 즉시 claim해야 합니다.
+	*/
 }
 
 /* Free the resource hold by the supplemental page table */
