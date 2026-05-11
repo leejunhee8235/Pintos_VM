@@ -51,6 +51,7 @@ struct page {
 		hash table element를 다루는 모든 함수는 실제 element type의 pointer가 아니라 struct hash_elem *을 받고 반환합니다.
 	*/
 	struct hash_elem hash_elem;
+	bool writable;
 	/* Your implementation */
 
 	/* Per-type data are binded into the union.

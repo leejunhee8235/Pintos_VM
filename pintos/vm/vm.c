@@ -51,11 +51,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
-
-		/* TODO: Insert the page into the spt. */
 	}
 err:
 	return false;
@@ -79,7 +74,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 		&spt->pages 에서, 
 		즉 해당 프로세스가 가지고 있는 spt에서 
 		page의 elem과 같은 elem을 찾는다.
-
+	
 		AI 답변
 		=> page의 elem과 같은 elem을 찾는다기보다, hash_find()가 내부적으로
 		p와 같은 기준의 page를 찾는것이다.
@@ -87,6 +82,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 		hash_elem을 통해서, 같은키(va)를 가진 page를 찾는다.
 	*/
 	e = hash_find(&spt->pages, &p.hash_elem);
+	// page에 hash_elem을 사용하는 이유?
 
 	return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
@@ -153,7 +149,7 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-
+	
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
