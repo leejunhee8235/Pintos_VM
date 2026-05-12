@@ -54,14 +54,14 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		upage : 유저의 가상주소 -> 어느 가상 주소 영역에 이 페이지가 할당 될 것인지
 		writable : 해당 page가 읽기권한인지 쓰기권한인지
 		init : 어떤 type으로 initializer 해줄 건지?? -> 잘모르겠음
+		AI 답변 -> page fault가 일어났을 때, 실제 내용을 채우는 함수이다.
 		aux : 페이지가 초기화 될 때, 들고 있는 메타 데이터(알아야 하는) 
 		ex) read_byte(몇 바이트 읽어야 하는지), zero_byte(얼마만큼 0 패딩을 해야하는지), file(어떤 파일인지), offset(어디부터 읽어야 하는지)...
 	
 		실제로 메모리에 올리는 게 아니라, 처음 load할때 불러온다?
 		그래서 file or anon page 에 대한 정보를 SPT에 올린다.
 	*/
-	ASSERT (VM_TYPE(type) != VM_UNINIT)
-		
+	ASSERT(VM_TYPE(type) != VM_UNINIT);
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
 	/* Check wheter the upage is already occupied or not. */
@@ -76,11 +76,11 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			case VM_ANON:
 				// 여기서 uninit page 구조체를 생성한 다음, 그 구조체 안의 initializer에 anon or file 을 넣어준다
 				// uninit page를 만들어 주는 것이기 때문에 type에는 VM_UNINIT 를 넣어줘야한다?
-				// aux에는 아무것도 안 넣어줘도 되는가? 인자에 뭐가 들어올까
-				uninit_new(page, upage, init, VM_UNINIT, aux, anon_initializer);
+				// type 에는 uninit page가 변해야 할 type을 적어놔야 한다.
+				uninit_new(page, upage, init, type, aux, anon_initializer);
 				break;
 			case VM_FILE:
-				uninit_new(page, upage, init, VM_UNINIT, aux, file_backed_initializer);
+				uninit_new(page, upage, init, type, aux, file_backed_initializer);
 				break;
 			default:
 				free(page);
