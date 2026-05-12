@@ -42,16 +42,64 @@ static struct frame *vm_evict_frame (void);
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
+/*
+	lazy loading 을 위한 page를 만들고, SPT에 등록하는 함수
+*/
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
-
+	/*
+		인자에 어떤 값들이 들어가는지 먼저 체크한다.
+		type : uninit page가 초기화 될 때 어떤 type 인지 정하는 인자(anon, file)
+		upage : 유저의 가상주소 -> 어느 가상 주소 영역에 이 페이지가 할당 될 것인지
+		writable : 해당 page가 읽기권한인지 쓰기권한인지
+		init : 어떤 type으로 initializer 해줄 건지?? -> 잘모르겠음
+		aux : 페이지가 초기화 될 때, 들고 있는 메타 데이터(알아야 하는) 
+		ex) read_byte(몇 바이트 읽어야 하는지), zero_byte(얼마만큼 0 패딩을 해야하는지), file(어떤 파일인지), offset(어디부터 읽어야 하는지)...
+	
+		실제로 메모리에 올리는 게 아니라, 처음 load할때 불러온다?
+		그래서 file or anon page 에 대한 정보를 SPT에 올린다.
+	*/
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
-
+		
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
+		struct page *page = malloc(sizeof(struct page));
+		// page malloc 에 실패했을 때
+		if(page == NULL){
+			return false;
+		}
+		// VM type에 맞는 init? 
+		switch(VM_TYPE(type)){
+			case VM_ANON:
+				// 여기서 uninit page 구조체를 생성한 다음, 그 구조체 안의 initializer에 anon or file 을 넣어준다
+				// uninit page를 만들어 주는 것이기 때문에 type에는 VM_UNINIT 를 넣어줘야한다?
+				// aux에는 아무것도 안 넣어줘도 되는가? 인자에 뭐가 들어올까
+				uninit_new(page, upage, init, VM_UNINIT, aux, anon_initializer);
+				break;
+			case VM_FILE:
+				uninit_new(page, upage, init, VM_UNINIT, aux, file_backed_initializer);
+				break;
+			default:
+				free(page);
+				return false;
+		}
+		/*
+			TODO: page를 생성하고, VM type에 맞는 initializer를 가져온다. -> 이걸 어떻게 가져오는데
+			TODO: 그 다음 uninit_new를 호출해서 "uninit" page 구조체를 만든다.
+			TODO: uninit_new를 호출한 뒤에 필요한 field를 수정해야 한다. -> 필요한 field?
+		*/
+		
+		/* TODO: Insert the page into the spt. */
+		// spt_insert 값이 null 이면 성공적으로 insert가 되었다는 뜻(true)
+		// 그래서 null 이 아니면(false)면 할당한 페이지를 free
+		if(!spt_insert_page(spt, page)){
+			free(page);
+			return false;
+		}
+		return true;
 	}
 err:
 	return false;

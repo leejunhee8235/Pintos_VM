@@ -23,6 +23,10 @@ static const struct page_operations uninit_ops = {
 };
 
 /* DO NOT MODIFY this function */
+/*
+	uninit_new() 를 호출하면 여기서 page를 초기화 시켜준다.
+	union 의 3가지 타입에서 uninit page로 설정한다.
+*/
 void
 uninit_new (struct page *page, void *va, vm_initializer *init,
 		enum vm_type type, void *aux,
