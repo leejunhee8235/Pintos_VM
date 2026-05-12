@@ -63,6 +63,9 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 }
 
 /* Initalize the page on first fault */
+/*
+	page fault 가 발생 했을 때, uninit page를 해당 type page로 실제로 바꿔주는 함수
+*/
 static bool
 uninit_initialize (struct page *page, void *kva) {
 	struct uninit_page *uninit = &page->uninit;
@@ -90,7 +93,7 @@ uninit_initialize (struct page *page, void *kva) {
 static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit = &page->uninit;
-	/* page struct 가 보유하던 resource를 해제한다. */
+	/* page struct 가 보유하던 resource를 해제한다.*/
 	if(VM_TYPE(page->uninit.type) == VM_ANON){
 		vm_dealloc_page(page);
 	}

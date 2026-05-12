@@ -54,16 +54,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		upage : 유저의 가상주소 -> 어느 가상 주소 영역에 이 페이지가 할당 될 것인지
 		writable : 해당 page가 읽기권한인지 쓰기권한인지
 		init : 어떤 type으로 initializer 해줄 건지?? -> 잘모르겠음
-		AI 답변 -> page fault가 일어났을 때, 실제 내용을 채우는 함수이다.
+		AI 답변 -> page fault가 일어났을 때, 실제 내용을 채우는 함수이다(lazy_load_segment)
 		aux : 페이지가 초기화 될 때, 들고 있는 메타 데이터(알아야 하는) 
 		ex) read_byte(몇 바이트 읽어야 하는지), zero_byte(얼마만큼 0 패딩을 해야하는지), file(어떤 파일인지), offset(어디부터 읽어야 하는지)...
-	
-		실제로 메모리에 올리는 게 아니라, 처음 load할때 불러온다?
-		그래서 file or anon page 에 대한 정보를 SPT에 올린다.
 	*/
 	ASSERT(VM_TYPE(type) != VM_UNINIT);
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		struct page *page = malloc(sizeof(struct page));
@@ -91,7 +87,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			TODO: 그 다음 uninit_new를 호출해서 "uninit" page 구조체를 만든다.
 			TODO: uninit_new를 호출한 뒤에 필요한 field를 수정해야 한다. -> 필요한 field?
 		*/
-		
+		page->writable = writable;
 		/* TODO: Insert the page into the spt. */
 		// spt_insert 값이 null 이면 성공적으로 insert가 되었다는 뜻(true)
 		// 그래서 null 이 아니면(false)면 할당한 페이지를 free
