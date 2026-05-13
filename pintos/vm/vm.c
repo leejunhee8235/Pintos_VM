@@ -64,11 +64,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	if (p == NULL) 
 		return false;
 
-	p->writable = writable;
+
 
 	switch (VM_TYPE(type)) {
 	case VM_ANON:
 		uninit_new(p, pg_round_down(upage), init, VM_ANON, aux, anon_initializer);
+		p->writable = writable;	
 		if (!spt_insert_page(spt, p)){
 			free(p);
     		return false;
@@ -76,6 +77,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		break;
 	case VM_FILE:
 		uninit_new(p, pg_round_down(upage), init, VM_FILE, aux, file_backed_initializer);
+		p->writable = writable;	
 		if (!spt_insert_page(spt, p)){
 			free(p);
     		return false;
@@ -86,7 +88,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		return false;
 		break;
 	}
-	
+		
 		return true;
 	}
 	
