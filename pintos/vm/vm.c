@@ -46,20 +46,57 @@ bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
 
-	ASSERT (VM_TYPE(type) != VM_UNINIT)
+	
+	ASSERT (VM_TYPE(type) != VM_UNINIT);
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
+	
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, upage) == NULL) {
+	if (spt_find_page (spt, pg_round_down(upage)) == NULL) {
+		/* TODO: Create the page, fetch the initialier according to the VM type,
+		 * TODO: and then create "uninit" page struct by calling uninit_new. You
+		 * TODO: should modify the field after calling the uninit_new. */
+
+		/* TODO: Insert the page into the spt. */
+
+	struct page *p = malloc(sizeof *p);
+	/* malloc 실패 체크*/
+	if (p == NULL) 
+		return false;
+
+	p->writable = writable;
+
+	switch (VM_TYPE(type)) {
+	case VM_ANON:
+		uninit_new(p, pg_round_down(upage), init, VM_ANON, aux, anon_initializer);
+		if (!spt_insert_page(spt, p)){
+			free(p);
+    		return false;
+		} 
+		break;
+	case VM_FILE:
+		uninit_new(p, pg_round_down(upage), init, VM_FILE, aux, file_backed_initializer);
+		if (!spt_insert_page(spt, p)){
+			free(p);
+    		return false;
+		}    		
+		break;
+	default:
+		free(p);
+		return false;
+		break;
 	}
+	
+		return true;
+	}
+	
 err:
 	return false;
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
+spt_find_page (struct supplemental_page_table *spt, void *va) {
 	/*
 		주어진 supplemental page table에서 va에 해당하는 struct page를 찾는다.
 		찾지 못하면 NULL을 return한다.
@@ -90,8 +127,8 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 
 /* Insert PAGE into spt with validation. */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
 	/*
 		주어진 SPT에 인자로 주어진 page를 insert 한다.
 		va가 이미 spt안에 존재하는지 여부를 확인해야 한다.
