@@ -36,6 +36,13 @@ struct fork_aux {
 	bool success;
 };
 
+struct load_info {
+	struct file *file;
+	off_t offset;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -812,13 +819,6 @@ lazy_load_segment (struct page *page, void *aux) {
  *
  * 성공하면 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가
  * 발생하면 false를 반환한다. */
-struct load_info{
-	struct file *file;
-	off_t offset;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-};
-
 static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
@@ -865,11 +865,6 @@ setup_stack (struct intr_frame *if_) {
 	bool alloc_success = false;
 	bool claim_success = false;
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
-	/*
-	 스택용 anonymous page를 SPT에 만들고,
-	 즉시 claim해서 실제 frame과 PML4 매핑을 만든 뒤, 
-	 rsp를 USER_STACK으로 맞춘다
-	*/
 	/*
 		VM_MARKER_0 으로 해당 page가 stack인지 체크해준다.
 	*/
