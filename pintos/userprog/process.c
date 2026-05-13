@@ -790,6 +790,10 @@ install_page (void *upage, void *kpage, bool writable) {
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 로드한다. */
+	/*
+		segment를 읽어 올 file을 찾는다.
+		최종적으로 segment를 memory에 읽어 넣어야 한다.
+	*/
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있다. */
 }
