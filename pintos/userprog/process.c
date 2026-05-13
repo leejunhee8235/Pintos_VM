@@ -25,7 +25,12 @@
 #endif
 
 static struct semaphore initd_wait_sema;
-
+struct load_info {
+	off_t offset;
+	struct file *file;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+}
 struct fork_aux {
 	struct thread *parent;
 	struct intr_frame parent_if;
@@ -783,15 +788,20 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-#else
+// #else
 /* 여기부터의 코드는 프로젝트 3 이후에 사용된다.
  * 프로젝트 2에서만 이 함수를 구현하려면 위쪽 블록에 구현하라. */
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일에서 세그먼트를 로드한다. */
+	struct load_info *info = aux;
+	file_seek(info->file, info->offset);
+	file_read(info->file, info., info->read_bytes);
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
+
 	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있다. */
+
 }
 
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 로드한다.
@@ -822,7 +832,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: lazy_load_segment에 정보를 전달하도록 aux를 설정한다. */
-		void *aux = NULL;
+		struct load_info *aux;
+		aux->file = file;
+		aux->offset = ofs;
+		aux->read_bytes = read_bytes;
+		aux->zero_bytes = zero_bytes;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
