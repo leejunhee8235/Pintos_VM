@@ -94,7 +94,7 @@ static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit = &page->uninit;
 	/* page struct 가 보유하던 resource를 해제한다.*/
-	if(VM_TYPE(page->uninit.type) == VM_ANON){
-		vm_dealloc_page(page);
+	if(VM_TYPE(uninit->type) == VM_ANON){
+		free(uninit->aux);
 	}
 }
