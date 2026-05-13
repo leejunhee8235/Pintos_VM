@@ -20,8 +20,9 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "intrinsic.h"
-#ifdef VM
 #include "vm/vm.h"
+#ifdef VM
+//#include "vm/vm.h"
 #endif
 
 static struct semaphore initd_wait_sema;
@@ -33,6 +34,13 @@ struct fork_aux {
 	struct semaphore start_sema;
 	struct semaphore done_sema;
 	bool success;
+};
+
+struct load_info {
+	struct file *file;
+	off_t offset;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
 };
 
 static void process_cleanup (void);
@@ -710,12 +718,15 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+	//printf("[load_seg 들어왔나요]\n");
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
 	file_seek (file, ofs);
-	while (read_bytes > 0 || zero_bytes > 0) {
+	//printf("[파일 찾았나요]\n");
+	while (read_bytes > 0 || zero_bytes > 0)
+	{
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고 마지막 PAGE_ZERO_BYTES
 		 * 바이트를 0으로 채운다. */
@@ -746,6 +757,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 	}
+	//printf("\n[LOAD_SEGMENT 통과 했어요?]\n");
 	return true;
 }
 
@@ -796,6 +808,10 @@ lazy_load_segment (struct page *page, void *aux) {
 	*/
 	/* TODO: 이 함수는 VA 주소에서 첫 페이지 폴트가 발생했을 때 호출된다. */
 	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있다. */
+	struct load_info *info = aux;
+	file_seek(info->file, info->offset);
+	off_t read_byte = file_read(info->file, page->frame->kva, info->read_bytes);
+	return true;
 }
 
 /* FILE의 OFS 오프셋에서 시작하는 세그먼트를 UPAGE 주소에 로드한다.
@@ -812,13 +828,15 @@ lazy_load_segment (struct page *page, void *aux) {
  * 성공하면 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가
  * 발생하면 false를 반환한다. */
 static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+load_segment(struct file *file, off_t ofs, uint8_t *upage,
+			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+{
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
-	while (read_bytes > 0 || zero_bytes > 0) {
+	//printf("\n바깥호출\n");
+	while (read_bytes > 0 || zero_bytes > 0)
+	{
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고 마지막 PAGE_ZERO_BYTES
 		 * 바이트를 0으로 채운다. */
@@ -826,30 +844,51 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: lazy_load_segment에 정보를 전달하도록 aux를 설정한다. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		struct load_info *aux = malloc(sizeof(struct load_info));
+		if(aux == NULL){
 			return false;
-
+		}
+		aux->file = file;
+		aux->offset = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
+											writable, lazy_load_segment, aux)){
+			return false;
+		}
 		/* 다음으로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
+		ofs += page_read_bytes;
 		upage += PGSIZE;
 	}
+	//printf("\n[LOAD_SEGMENT 통과 했어요?]\n");
 	return true;
 }
 
 /* USER_STACK에 스택 PAGE를 만든다. 성공하면 true를 반환한다. */
 static bool
 setup_stack (struct intr_frame *if_) {
-	bool success = false;
-	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	bool alloc_success = false;
+	bool claim_success = false;
+	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
+	/*
+		VM_MARKER_0 으로 해당 page가 stack인지 체크해준다.
+	*/
+	alloc_success = vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true); // spt에 page insert
 
-	/* TODO: stack_bottom에 스택을 매핑하고 즉시 페이지를 claim한다.
-	 * TODO: 성공하면 그에 맞게 rsp를 설정한다.
-	 * TODO: 해당 페이지가 스택임을 표시해야 한다. */
-	/* TODO: 구현 내용을 여기에 작성한다. */
+	if(alloc_success == true){
+		claim_success = vm_claim_page(stack_bottom);
+	}
 
-	return success;
+	if(claim_success == true){
+		if_->rsp = USER_STACK;
+	}
+		/* TODO: stack_bottom에 스택을 매핑하고 즉시 페이지를 claim한다.
+		 * TODO: 성공하면 그에 맞게 rsp를 설정한다.
+		 * TODO: 해당 페이지가 스택임을 표시해야 한다. */
+		/* TODO: 구현 내용을 여기에 작성한다. */
+
+	return claim_success;
 }
 #endif /* VM */

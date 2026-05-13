@@ -228,14 +228,46 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
+vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
+		bool user UNUSED, bool write, bool not_present UNUSED) {
+	//printf("[handler 들어왔나요?]\n");
+	struct thread *curr = thread_current();
+	struct supplemental_page_table *spt = &curr->spt;
+
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	/*
+		write 권한 위반일 경우에는 process_exit()
+	*/
+	struct page *page = spt_find_page(spt, addr);
+	/*
+		권한 위반이 아닐경우에는 pml4에 매핑이 안되있는 경우
+		근데 여기서 또 분기가 나뉜다.
+		spt_find_page() 를 호출하고 만약 spt에도 없으면 stack_growth 검사를 해야 함
+		근데 spt에 있으면 vm_do_claim_page로 pml4에 매핑 시켜 주면 된다.
+	*/
+	if(page == NULL){
+		// spt에는 page가 존재하고 pml4에는 매핑이 안되어 있는 경우?
+		// 이 page fault 를 살릴 수 있는 경우 생각을 해야하고
+		// spt에도 없는 경우도 stack 검사를 해야하나?
+		/*
+			이 경우 spt에도 page가 없는 상황이다.
+			그럼 stack 검사를 해야한다.
+			stack growth 조건을 어떻게 검사할까
+		*/
+		// 일단 false 반환
+		return false;
+	}
 
-	return vm_do_claim_page (page);
+	if (write == true && page->writable == false){
+		return false;
+	}
+	/*
+		이제 spt에 page가 존재하는 경우이다.
+		흐름도에 따르면 vm_do_claim_page를 호출한다.
+	*/
+	//handler 조건 통과했나요]\n");
+	return vm_do_claim_page(page);
 }
 
 /* Free the page.
