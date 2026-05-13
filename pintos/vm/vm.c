@@ -230,6 +230,7 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		bool user UNUSED, bool write, bool not_present UNUSED) {
+	//printf("[handler 들어왔나요?]\n");
 	struct thread *curr = thread_current();
 	struct supplemental_page_table *spt = &curr->spt;
 
@@ -265,7 +266,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		이제 spt에 page가 존재하는 경우이다.
 		흐름도에 따르면 vm_do_claim_page를 호출한다.
 	*/
-	return vm_do_claim_page (page);
+	//handler 조건 통과했나요]\n");
+	return vm_do_claim_page(page);
 }
 
 /* Free the page.
