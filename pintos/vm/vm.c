@@ -231,8 +231,8 @@ bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct thread *curr = thread_current();
-	struct supplemental_page_table *spt UNUSED = curr->spt;
-	
+	struct supplemental_page_table *spt = curr->spt;
+
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	/*
@@ -260,11 +260,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			stack growth 조건을 어떻게 검사할까
 		*/
 		uintptr_t check_point_rsp = curr->tf.rsp;
-		if (stack growth 조건에 만족한다면)
-		{ // 이 부분은 나중에 수정
-			vm_stack_growth(addr);
-			return true;
-		}
+		// if (stack growth 조건에 만족한다면)
+		// { // 이 부분은 나중에 수정
+		// 	vm_stack_growth(addr);
+		// 	return true;
+		// }
 	}
 	/*
 		이제 spt에 page가 존재하는 경우이다.
