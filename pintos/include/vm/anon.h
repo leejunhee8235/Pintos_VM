@@ -4,7 +4,9 @@
 struct page;
 enum vm_type;
 
+// 익명 페이지를 설명하는 구조체
 struct anon_page {
+    size_t swap_slot; // swap 위치 
 };
 
 void vm_anon_init (void);
