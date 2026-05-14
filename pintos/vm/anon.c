@@ -60,20 +60,24 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the swap disk. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
-	struct anon_page *anon_page = &page->anon;
+	(void) page;
+	(void) kva;
 	// swap disk 에 나가 있던 anonymous page를 다시 메모리로 가져옴
+	// TODO: 실제 swap-in 로직 구현 전까지는 실패를 명확히 반환한다.
+	return false;
 }
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
-	struct anon_page *anon_page = &page->anon;
+	(void) page;
 
 	// 메모리의 내용을 디스크로 복사하여 익명 페이지(anonymous page)를 스왑 디스크(swap disk)로 스왑 아웃(swap out)합니다. 
 	// 먼저 스왑 테이블(swap table)을 사용해 디스크에서 비어 있는 스왑 슬롯(swap slot)을 찾은 다음, 
 	// 데이터 페이지를 해당 슬롯에 복사합니다. 데이터의 위치는 page 구조체에 저장되어야 합니다. 
 	// 디스크에 더 이상 비어 있는 슬롯이 없으면 커널 패닉(kernel panic)을 발생시킬 수 있습니다. -> swap table이 모두 true면 kernel panic 발생 
-
+	// TODO: 실제 swap-out 로직 구현 전까지는 실패를 명확히 반환한다.
+	return false;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
