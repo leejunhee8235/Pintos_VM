@@ -217,8 +217,19 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
+/*
+	실제로 stack의 크기를 늘리는 함수.
+	pintos에서는 1MB로 제한한다.
+*/
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
+	/*
+		익명페이지를 하나 이상 할당하여 스택 크기를 늘린다?
+	*/
+	bool growth_success = false;
+	// void *stack_bottom = (void *)(((uint8_t *)addr) - PGSIZE);
+	// printf("[여기까지 와요?]\n");
+	growth_success = vm_alloc_page(VM_ANON | VM_MARKER_0, pg_round_down(addr), true);
 }
 
 /* Handle the fault on write_protected page */
@@ -228,9 +239,15 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
+vm_try_handle_fault (struct intr_frame *f, void *addr,
 		bool user UNUSED, bool write, bool not_present UNUSED) {
 	//printf("[handler 들어왔나요?]\n");
+
+	if(is_kernel_vaddr(addr)){
+		//printf("[혹시 여기에요?]\n");
+		return false;
+	}
+
 	struct thread *curr = thread_current();
 	struct supplemental_page_table *spt = &curr->spt;
 
@@ -240,6 +257,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		write 권한 위반일 경우에는 process_exit()
 	*/
 	struct page *page = spt_find_page(spt, addr);
+	// printf("[여기에요?]\n");
 	/*
 		권한 위반이 아닐경우에는 pml4에 매핑이 안되있는 경우
 		근데 여기서 또 분기가 나뉜다.
@@ -247,20 +265,39 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		근데 spt에 있으면 vm_do_claim_page로 pml4에 매핑 시켜 주면 된다.
 	*/
 	if(page == NULL){
-		// spt에는 page가 존재하고 pml4에는 매핑이 안되어 있는 경우?
-		// 이 page fault 를 살릴 수 있는 경우 생각을 해야하고
-		// spt에도 없는 경우도 stack 검사를 해야하나?
 		/*
 			이 경우 spt에도 page가 없는 상황이다.
 			그럼 stack 검사를 해야한다.
 			stack growth 조건을 어떻게 검사할까
+			=> gitbook에는 fault가 난 접근이(fault_addr?)이 실제로 stack 접근처럼 보이는 경우에만
+			   stack을 늘려야 한다.
+			   이를 위해 구현자는 stack 접근과 일반적인 잘못된 memory 접근을 구분 할 수 있는 판단기준을 만들어야 함.
 		*/
-		// 일단 false 반환
-		return false;
+		/*
+			디버그로 확인해본 결과, stack_growth 검사에서 스택을 늘려야 하는 범위는 스택 포인터 - 8 까지 인거같음.
+			따라서 addr이 rsp - 8 ~ rsp 사이에 있을 때 stack_growth 를 수행 하면 되지 않을까?
+		*/
+		//printf("[spt에 page가 없나요?]\n");
+		if (addr >= f->rsp - STACK_RANGE)
+		{
+			// stack을 늘려야 할 경우에는 vm_sg 함수 호출
+			//printf("[스택을 늘려야 합니까?]\n");
+			vm_stack_growth(addr);
+			// printf("[addr] : %p\n", addr);
+			// printf("[rsp의 위치] : %p\n", f->rsp);
+			return true;
+		}
+		// printf("[rsp - 8 의 위치] : %p\n", f->rsp - 8);
+		// printf("[addr] : %p\n", addr);
+		// printf("[rsp의 위치] : %p\n", f->rsp);
+
+		curr->exit_status = -1;
+		thread_exit ();
 	}
 
 	if (write == true && page->writable == false){
-		return false;
+		curr->exit_status = -1;
+		thread_exit();
 	}
 	/*
 		이제 spt에 page가 존재하는 경우이다.

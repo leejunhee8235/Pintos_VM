@@ -333,7 +333,7 @@ handle_read (struct syscall_entry *entry) {
 
 
 	entry->should_return_value = true;
-
+	//printf("[여기까지 와요?]\n");
 	if (!is_valid_user_buffer ((void *) buffer, size)) {
 		exit_process (-1);
 	}
@@ -504,7 +504,6 @@ get_next_page_if_valid (void *ptr) {
 	if (!is_user_vaddr (ptr)) {
 		return NULL;
 	}
-
 	/* thread가 가지는 유저 가상 주소(pml4 필드)가 unmapped 상태인가? */
 	if (pml4_get_page (thread_current ()->pml4, ptr) == NULL) {
 		return NULL;
