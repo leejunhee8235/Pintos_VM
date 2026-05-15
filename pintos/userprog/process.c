@@ -810,9 +810,13 @@ lazy_load_segment (struct page *page, void *aux) {
 	file_seek(info->file, info->offset);
 	off_t read_byte = file_read(info->file, page->frame->kva, info->read_bytes);
 
+
 	memset(page->frame->kva + info->read_bytes, 0, info->zero_bytes);
 	// printf("[frame의 kva] :%p\n", page->frame->kva);
 	// zero 바이트를 채워줘야 하는 이유?
+
+	free(info);
+
 	return true;
 }
 

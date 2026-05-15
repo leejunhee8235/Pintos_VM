@@ -90,11 +90,12 @@ uninit_initialize (struct page *page, void *kva) {
 	이 말이 spt에 page로 insert 됬지만 
 	프로그램 실행중에 한번도 호출되지 않은 page들을
 	삭제 하는 함수 인거 같음.*/
+
 static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit = &page->uninit;
 	/* page struct 가 보유하던 resource를 해제한다.*/
 	if(VM_TYPE(uninit->type) == VM_ANON){
-		free(uninit->aux);
+		free(uninit->aux); // aux 정보 정리
 	}
 }

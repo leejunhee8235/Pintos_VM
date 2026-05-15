@@ -87,7 +87,7 @@ struct page_operations {
 #define swap_in(page, v) (page)->operations->swap_in ((page), v)
 #define swap_out(page) (page)->operations->swap_out (page)
 #define destroy(page) \
-	if ((page)->operations->destroy) (page)->operations->destroy (page)
+	if ((page)->operations->destroy) (page)->operations->destroy (page) // page가 VM_UNINIT이면 uninit_destroy, VM_ANON이면 anon_destroy, VM_FILE이면 file_backed_destroy가 자동으로 불리는 구조
 
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
