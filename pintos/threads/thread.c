@@ -323,8 +323,7 @@ thread_exit (void) {
 	ASSERT (!intr_context ());
 
 #ifdef USERPROG
-    if (thread_current ()->pml4 != NULL)
-        process_exit ();
+	process_exit ();
 #endif
 
 	/* 상태를 죽어가는 것으로 설정하고 다른 프로세스를 예약하면 됩니다.
@@ -358,8 +357,6 @@ thread_yield_if_needed (void) {
 	if (list_empty (&ready_list))
 		return;
 
-	enum intr_level old_level = intr_disable ();
-
 	if (!thread_mlfqs) {
 		// Priority Donation 때문에 정렬 필요, list_pop_front를 해야하니까
 		list_sort (&ready_list, cmp_priority_more, NULL);
@@ -368,8 +365,6 @@ thread_yield_if_needed (void) {
 	struct thread *peek_t =
 		list_entry (list_front (&ready_list), struct thread, elem);
 	bool need_preemption = peek_t->priority > thread_current ()->priority;
-
-	intr_set_level (old_level);
 
 	if (need_preemption) {
 		if (intr_context ())
@@ -801,10 +796,8 @@ thread_mlfqs_recalc_priorities (void) {
 		e = list_next(e);
 	}
 
-	
-	intr_set_level (old_level);
-
 	thread_yield_if_needed(); // 선점을 위해서, 우선순위 바뀌었으니까
+	intr_set_level (old_level);
 }
 
 static void
