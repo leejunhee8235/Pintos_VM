@@ -165,7 +165,6 @@ void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	hash_delete(&spt->pages, &page->hash_elem); // page를 free하기 전에 SPT hash table에서 page 제거 
 	vm_dealloc_page (page);
-	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
