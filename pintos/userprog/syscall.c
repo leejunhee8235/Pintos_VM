@@ -18,6 +18,9 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "devices/input.h"
+#ifdef VM
+#include "vm/vm.h"
+#endif
 
 
 struct syscall_entry {
@@ -52,13 +55,14 @@ static void handle_create (struct syscall_entry *);
 static void handle_remove (struct syscall_entry *);
 static void handle_open (struct syscall_entry *);
 static void handle_filesize (struct syscall_entry *);
-static void handle_read (struct syscall_entry *);
-static void handle_write (struct syscall_entry *);
+static void handle_read (struct intr_frame *, struct syscall_entry *);
+static void handle_write (struct intr_frame *, struct syscall_entry *);
 static void handle_seek (struct syscall_entry *);
 static void handle_tell (struct syscall_entry *);
 static void handle_close (struct syscall_entry *);
 static void *get_next_page_if_valid (void *);
-static bool is_valid_user_buffer (void *, size_t);
+static bool is_valid_user_buffer (struct intr_frame *, void *, size_t, bool);
+static bool is_valid_user_buffer_page (struct intr_frame *, void *, bool);
 static bool is_valid_user_string (char *);
 
 /* 시스템 콜.
@@ -144,10 +148,10 @@ dispatch_syscall (struct intr_frame *f, struct syscall_entry *entry) {
 			handle_filesize (entry);
 			break;
 		case SYS_READ:
-			handle_read (entry);
+			handle_read (f, entry);
 			break;
 		case SYS_WRITE:
-			handle_write (entry);
+			handle_write (f, entry);
 			break;
 		case SYS_SEEK:
 			handle_seek (entry);
@@ -323,7 +327,7 @@ handle_filesize (struct syscall_entry *entry) {
 
 /* TODO: 구현하면 UNUSED, ASSERT 빼기 */
 static void
-handle_read (struct syscall_entry *entry) {
+handle_read (struct intr_frame *f, struct syscall_entry *entry) {
 	int fd = entry->args[0];
 	void *buffer = (void *) entry->args[1];
 	size_t size = entry->args[2];
@@ -334,7 +338,7 @@ handle_read (struct syscall_entry *entry) {
 
 	entry->should_return_value = true;
 	//printf("[여기까지 와요?]\n");
-	if (!is_valid_user_buffer ((void *) buffer, size)) {
+	if (!is_valid_user_buffer (f, buffer, size, true)) {
 		exit_process (-1);
 	}
 
@@ -362,7 +366,7 @@ handle_read (struct syscall_entry *entry) {
 
 /* TODO: 구현하면 UNUSED, ASSERT 빼기 */
 static void
-handle_write (struct syscall_entry *entry) {
+handle_write (struct intr_frame *f, struct syscall_entry *entry) {
 	int fd = entry->args[0];
 	const void *buffer = (const void *) entry->args[1];
 	size_t size = entry->args[2];
@@ -370,7 +374,7 @@ handle_write (struct syscall_entry *entry) {
 
 	entry->should_return_value = true;
 	
-	if (!is_valid_user_buffer ((void *) buffer, size)) {
+	if (!is_valid_user_buffer (f, (void *) buffer, size, false)) {
 		exit_process (-1);
 	}
 
@@ -446,23 +450,63 @@ handle_close (struct syscall_entry *entry) {
 }
 
 static bool
-is_valid_user_buffer (void *buf, size_t size) {
-	void *p = buf;
+is_valid_user_buffer (struct intr_frame *f, void *buf, size_t size, bool write) {
+	uint8_t *p = buf;
 	/* 산술 연산 시에는 uintptr_t 변환이 안전해보임. */
-	void *buf_end = (void *) ((uintptr_t) p + size);
+	uint8_t *buf_end = (uint8_t *) ((uintptr_t) p + size);
 
 	if (size <= 0) {
-		return get_next_page_if_valid (p) != NULL;
+		return is_valid_user_buffer_page (f, p, write);
 	}
 
 	while (p < buf_end) {
-		/* 페이지가 유효하면 다음 페이지, 아니면 NULL 반환. */
-		p = get_next_page_if_valid (p);
-		if (p == NULL) {
+		if (!is_valid_user_buffer_page (f, p, write)) {
 			return false;
 		}
+		p = pg_next (p);
 	}
 	return true;
+}
+
+static bool
+is_valid_user_buffer_page (struct intr_frame *f, void *ptr, bool write) {
+	void *upage;
+
+#ifndef VM
+	(void) f;
+	(void) write;
+#endif
+
+	if (ptr == NULL || !is_user_vaddr (ptr)) {
+		return false;
+	}
+
+	upage = pg_round_down (ptr);
+	if (pml4_get_page (thread_current ()->pml4, upage) != NULL) {
+		return true;
+	}
+
+#ifdef VM
+	struct page *page = spt_find_page (&thread_current ()->spt, upage);
+	if (page != NULL) {
+		if (write && !page->writable) {
+			return false;
+		}
+		return vm_claim_page (upage);
+	}
+
+	if (f != NULL
+			&& (uintptr_t) ptr >= (uintptr_t) f->rsp - STACK_RANGE
+			&& (uintptr_t) ptr < (uintptr_t) USER_STACK) {
+		if (!vm_try_handle_fault (f, ptr, true, write, true)) {
+			return false;
+		}
+		return pml4_get_page (thread_current ()->pml4, upage) != NULL
+			|| vm_claim_page (upage);
+	}
+#endif
+
+	return false;
 }
 
 static bool
@@ -508,6 +552,5 @@ get_next_page_if_valid (void *ptr) {
 	if (pml4_get_page (thread_current ()->pml4, ptr) == NULL) {
 		return NULL;
 	}
-
 	return pg_next (ptr);
 }
