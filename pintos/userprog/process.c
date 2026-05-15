@@ -811,6 +811,8 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct load_info *info = aux;
 	file_seek(info->file, info->offset);
 	off_t read_byte = file_read(info->file, page->frame->kva, info->read_bytes);
+
+	free(info);
 	return true;
 }
 
