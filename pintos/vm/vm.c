@@ -5,6 +5,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
+#include "string.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -217,8 +218,19 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
+/*
+	실제로 stack의 크기를 늘리는 함수.
+	pintos에서는 1MB로 제한한다.
+*/
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
+	/*
+		익명페이지를 하나 이상 할당하여 스택 크기를 늘린다?
+	*/
+	bool growth_success = false;
+	// void *stack_bottom = (void *)(((uint8_t *)addr) - PGSIZE);
+	// printf("[여기까지 와요?]\n");
+	growth_success = vm_alloc_page(VM_ANON | VM_MARKER_0, pg_round_down(addr), true);
 }
 
 /* Handle the fault on write_protected page */
@@ -228,9 +240,15 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
+vm_try_handle_fault (struct intr_frame *f, void *addr,
 		bool user UNUSED, bool write, bool not_present UNUSED) {
 	//printf("[handler 들어왔나요?]\n");
+
+	if(is_kernel_vaddr(addr)){
+		//printf("[혹시 여기에요?]\n");
+		return false;
+	}
+
 	struct thread *curr = thread_current();
 	struct supplemental_page_table *spt = &curr->spt;
 
@@ -240,6 +258,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		write 권한 위반일 경우에는 process_exit()
 	*/
 	struct page *page = spt_find_page(spt, addr);
+	// printf("[여기에요?]\n");
 	/*
 		권한 위반이 아닐경우에는 pml4에 매핑이 안되있는 경우
 		근데 여기서 또 분기가 나뉜다.
@@ -247,20 +266,39 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr,
 		근데 spt에 있으면 vm_do_claim_page로 pml4에 매핑 시켜 주면 된다.
 	*/
 	if(page == NULL){
-		// spt에는 page가 존재하고 pml4에는 매핑이 안되어 있는 경우?
-		// 이 page fault 를 살릴 수 있는 경우 생각을 해야하고
-		// spt에도 없는 경우도 stack 검사를 해야하나?
 		/*
 			이 경우 spt에도 page가 없는 상황이다.
 			그럼 stack 검사를 해야한다.
 			stack growth 조건을 어떻게 검사할까
+			=> gitbook에는 fault가 난 접근이(fault_addr?)이 실제로 stack 접근처럼 보이는 경우에만
+			   stack을 늘려야 한다.
+			   이를 위해 구현자는 stack 접근과 일반적인 잘못된 memory 접근을 구분 할 수 있는 판단기준을 만들어야 함.
 		*/
-		// 일단 false 반환
-		return false;
+		/*
+			디버그로 확인해본 결과, stack_growth 검사에서 스택을 늘려야 하는 범위는 스택 포인터 - 8 까지 인거같음.
+			따라서 addr이 rsp - 8 ~ rsp 사이에 있을 때 stack_growth 를 수행 하면 되지 않을까?
+		*/
+		//printf("[spt에 page가 없나요?]\n");
+		if (addr >= f->rsp - STACK_RANGE)
+		{
+			// stack을 늘려야 할 경우에는 vm_sg 함수 호출
+			//printf("[스택을 늘려야 합니까?]\n");
+			vm_stack_growth(addr);
+			// printf("[addr] : %p\n", addr);
+			// printf("[rsp의 위치] : %p\n", f->rsp);
+			return true;
+		}
+		// printf("[rsp - 8 의 위치] : %p\n", f->rsp - 8);
+		// printf("[addr] : %p\n", addr);
+		// printf("[rsp의 위치] : %p\n", f->rsp);
+
+		curr->exit_status = -1;
+		thread_exit ();
 	}
 
 	if (write == true && page->writable == false){
-		return false;
+		curr->exit_status = -1;
+		thread_exit();
 	}
 	/*
 		이제 spt에 page가 존재하는 경우이다.
@@ -347,15 +385,128 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 
 /* Copy supplemental page table from src to dst */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
 	/*
-		src의 supplemental page table을 dst로 copy합니다.
-		child가 parent의 execution context를 상속해야 할 때, 즉 fork()에서 사용됩니다.
-		src의 supplemental page table에 있는 각 page를 순회하면서,
-		그 entry의 정확한 copy를 dst의 supplemental page table에 만들어야 합니다.
-		uninit page를 allocate하고, 즉시 claim해야 합니다.
-	*/
+	  src = 부모 SPT
+	  dst = 자식 SPT
+	 
+	  부모 SPT 안의 page들을 하나씩 돌면서,
+	  자식 SPT에 같은 va/type/writable을 가진 새 page를 만든다.
+	  부모 page가 실제 frame에 올라와 있으면,
+	  자식 page도 claim해서 새 frame을 붙이고 4KB 내용을 복사한다.
+	 */
+	struct hash_iterator i;
+	/* 부모 SPT의 hash table 순회를 시작한다. */
+	hash_first(&i, &(src)->pages);
+	// printf("[after hash_first]: hash=%p bucket=%p elem=%p elem_cnt=%zu bucket_cnt=%zu\n",
+	// 	   i.hash, i.bucket, i.elem, src->pages.elem_cnt, src->pages.bucket_cnt);
+	while (hash_next(&i)){
+		struct page *parent_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		/*
+		  hash table에는 struct page 자체가 아니라
+		  struct page 안의 hash_elem이 들어 있다.
+		 
+		  따라서 hash_entry를 통해 hash_elem에서
+		  실제 struct page 포인터를 얻는다.
+		 */
+		bool success = false;
+		/*
+		  cur_type:
+		  현재 parent_page가 어떤 type을 가지고 있는지 확인한다.
+		 
+		  VM_UNINIT이면 아직 lazy page 상태.
+		  VM_ANON이면 anonymous page.
+		  VM_FILE이면 file-backed page.
+		 */
+		enum vm_type cur_type = VM_TYPE(parent_page->operations->type);
+		/*
+		  change_type:
+		  자식에게 만들어 줄 page type.
+		  page_get_type을 쓴다.
+		 */
+		enum vm_type change_type = page_get_type(parent_page);
+
+		void *va = parent_page->va;
+		bool writable = parent_page->writable;
+		//printf("[확인] p_type : %d, get : %d\n", p_type, get);
+
+		/*
+		  parent_page 자체를 자식 SPT에 넣으면 안 된다.
+		  반드시 자식용 새 page를 만들어야 한다.
+		 */
+		switch(cur_type){
+			case VM_UNINIT:{
+				/*
+				  lazy page는 나중에 fault가 났을 때 실행할
+				  init 함수와 aux 정보를 가지고 있다.
+				 */
+				vm_initializer *init = parent_page->uninit.init;
+				void *aux = parent_page->uninit.aux;
+				/*
+				 자식 SPT에도 같은 lazy page를 만든다.
+				*/
+			   success = vm_alloc_page_with_initializer(change_type, va, writable, init, aux);
+			   if (!success){
+				   return false;
+			   }
+			   break;
+		    }
+		    case VM_ANON:{
+			   success = vm_alloc_page(change_type, va, writable);
+			   if (!success){
+				   return false;
+			   }
+			   break;
+		    }
+		    case VM_FILE:{
+			   success = vm_alloc_page(change_type, va, writable);
+			   if (!success){
+				   return false;
+			   }
+			   break;
+		    }
+		    default:
+			   return false;
+			   break;
+	    }
+	    /*
+		 방금 dst SPT에 만든 child page를 다시 찾는다.
+		 vm_alloc_page 계열 함수는 bool만 반환하므로,
+		 child_page 포인터가 필요하면 spt_find_page로 다시 찾아야 한다.
+		*/
+	   struct page *child_page = spt_find_page(dst, va);
+	   if(child_page == NULL){
+		   return false;
+	   }
+	   //printf("[spt에서 찾았어요?]\n");
+	   if (parent_page->frame != NULL){
+		   //printf("[여기 왔나요?]\n");
+		   if (!vm_claim_page(va)) {
+			   printf("[claim 실패]\n");
+			   return false;
+		   }
+		   // printf("[fork-copy] parent_page=%p child_page=%p\n", parent_page, child_page);
+		   // printf("[fork-copy] parent va=%p child va=%p\n", parent_page->va, child_page->va);
+		   // printf("[fork-copy] parent frame=%p child frame=%p\n",
+		   // 	   parent_page->frame, child_page->frame);
+		   // printf("[fork-copy] parent kva=%p child kva=%p\n",
+		   // 	   parent_page->frame ? parent_page->frame->kva : NULL,
+		   // 	   child_page->frame ? child_page->frame->kva : NULL);
+		   memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+		   //printf("[after fork-copy] memcpy done va=%p\n", parent_page->va);
+	   }
+	   // vm_alloc_page(p_type, p_va, p_writable);
+	   // spt_insert_page(dst, parent_page);
+	   // 다시 자식 spt에서 해당 page를 찾는다.
+	   /*
+		   1. hash table 순회
+		   2. 돌면서 부모의 page를 하나 꺼낸다. entry로 변환? 사용하려고?
+		   3. page에 들어있는 정보를 가져온다 (page_get_type 함수 사용)
+		   4. 이거를 child의 spt에 복제 할 수 있도록 만든다.
+	   */
+	}
+	return true;
 }
 
 static void 

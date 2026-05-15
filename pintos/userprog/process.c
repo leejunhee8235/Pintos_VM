@@ -724,7 +724,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (ofs % PGSIZE == 0);
 
 	file_seek (file, ofs);
-	//printf("[파일 찾았나요]\n");
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* 이 페이지를 어떻게 채울지 계산한다.
@@ -757,7 +756,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 	}
-	//printf("\n[LOAD_SEGMENT 통과 했어요?]\n");
 	return true;
 }
 
@@ -812,7 +810,13 @@ lazy_load_segment (struct page *page, void *aux) {
 	file_seek(info->file, info->offset);
 	off_t read_byte = file_read(info->file, page->frame->kva, info->read_bytes);
 
+
+	memset(page->frame->kva + info->read_bytes, 0, info->zero_bytes);
+	// printf("[frame의 kva] :%p\n", page->frame->kva);
+	// zero 바이트를 채워줘야 하는 이유?
+
 	free(info);
+
 	return true;
 }
 
@@ -836,7 +840,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-	//printf("\n바깥호출\n");
+	//printf("\n바깥호출 몇번?\n");
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* 이 페이지를 어떻게 채울지 계산한다.
@@ -844,6 +848,10 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		 * 바이트를 0으로 채운다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		// printf("[load_segment]: ofs=%lld upage=%p read_bytes=%u zero_bytes=%u page_read_bytes=%u page_zero_bytes=%u writable=%d\n",
+		// 	   file_tell(file), upage, read_bytes, zero_bytes,
+		// 	   page_read_bytes, page_zero_bytes, writable);
 
 		/* TODO: lazy_load_segment에 정보를 전달하도록 aux를 설정한다. */
 		struct load_info *aux = malloc(sizeof(struct load_info));
