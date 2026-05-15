@@ -6,6 +6,8 @@
 #include <string.h>
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
+#include "threads/mmu.h"
 
 
 #define SECTORS_PER_PAGE (PGSIZE / DISK_SECTOR_SIZE)
@@ -83,8 +85,33 @@ anon_swap_out (struct page *page) {
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
 static void
 anon_destroy (struct page *page) {
+
 	struct anon_page *anon_page = &page->anon;
 
+	// 1. frame이 있으면 frame 해제
+	struct frame *frame = page->frame;
+
+	// frame 은 정보 두 개 갖고 있음 
+	// void *kva;
+	// struct page *page; 
+
+	if (frame != NULL) {
+		// palloc_free_page(frame->kva) 하기 전에 pml4_clear_page()로 매핑을 지워주는 게 안전
+		if (thread_current()->pml4 != NULL) {
+			pml4_clear_page(thread_current()->pml4, page->va);
+		}
+
+		if (frame->kva != NULL) {
+			palloc_free_page(frame->kva);
+		}
+
+		frame->page = NULL;
+		page->frame = NULL;
+		free(frame);
+	}
+
+
+	// 2. swap slot을 쓰고 있으면 swap slot 해제
 	if (anon_page->swap_slot != BITMAP_ERROR) {
 
 		// swap out 되어있으면 swap bitmap에서 해당 slot reset 

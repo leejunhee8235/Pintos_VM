@@ -163,8 +163,8 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	hash_delete(&spt->pages, &page->hash_elem); // page를 free하기 전에 SPT hash table에서 page 제거 
 	vm_dealloc_page (page);
-	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -358,11 +358,22 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	*/
 }
 
+static void 
+page_destroy (struct hash_elem *p_, void *aux UNUSED) {
+
+	struct page *p = hash_entry(p_, struct page, hash_elem);
+	vm_dealloc_page(p);
+
+}
+
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+
+	 hash_destroy(&spt->pages, page_destroy);
+
 }
 
 /*
