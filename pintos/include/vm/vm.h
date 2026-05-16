@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 #include "lib/kernel/hash.h"
+#include "filesys/off_t.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -23,6 +24,12 @@ enum vm_type {
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
+};
+struct load_info{
+	struct file *file;
+	off_t offset;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
 };
 
 #include "vm/uninit.h"

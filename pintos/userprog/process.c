@@ -36,13 +36,6 @@ struct fork_aux {
 	bool success;
 };
 
-struct load_info {
-	struct file *file;
-	off_t offset;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-};
-
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
