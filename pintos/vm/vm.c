@@ -243,8 +243,15 @@ bool
 vm_try_handle_fault (struct intr_frame *f, void *addr,
 		bool user UNUSED, bool write, bool not_present UNUSED) {
 	//printf("[handler 들어왔나요?]\n");
+	uintptr_t *rsp;
+	if (user){
+		rsp = f->rsp;
+	}else{
+		rsp = (uintptr_t)thread_current()->rsp;
+	}
 
-	if(is_kernel_vaddr(addr)){
+	if (is_kernel_vaddr(addr))
+	{
 		//printf("[혹시 여기에요?]\n");
 		return false;
 	}
@@ -279,7 +286,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			따라서 addr이 rsp - 8 ~ rsp 사이에 있을 때 stack_growth 를 수행 하면 되지 않을까?
 		*/
 		//printf("[spt에 page가 없나요?]\n");
-		if (addr >= f->rsp - STACK_RANGE)
+		if (addr >= rsp - STACK_RANGE)
 		{
 			// stack을 늘려야 할 경우에는 vm_sg 함수 호출
 			//printf("[스택을 늘려야 합니까?]\n");
@@ -442,14 +449,17 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				  init 함수와 aux 정보를 가지고 있다.
 				 */
 				vm_initializer *init = parent_page->uninit.init;
-				void *aux = parent_page->uninit.aux;
+				struct load_info *child_aux = malloc(sizeof(struct load_info));
+				struct load_info *parent_aux = parent_page->uninit.aux;
 				/*
 				 자식 SPT에도 같은 lazy page를 만든다.
 				*/
-			   success = vm_alloc_page_with_initializer(change_type, va, writable, init, aux);
-			   if (!success){
-				   return false;
-			   }
+				*child_aux = *parent_aux;
+				success = vm_alloc_page_with_initializer(change_type, va, writable, init, child_aux);
+				if (!success)
+				{
+					return false;
+				}
 			   break;
 		    }
 		    case VM_ANON:{
@@ -483,7 +493,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	   if (parent_page->frame != NULL){
 		   //printf("[여기 왔나요?]\n");
 		   if (!vm_claim_page(va)) {
-			   printf("[claim 실패]\n");
+			   //printf("[claim 실패]\n");
 			   return false;
 		   }
 		   // printf("[fork-copy] parent_page=%p child_page=%p\n", parent_page, child_page);
@@ -508,9 +518,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 	}
 	return true;
 }
-
 static void 
-page_destroy (struct hash_elem *p_, void *aux UNUSED) {
+hash_page_destroy (struct hash_elem *p_, void *aux UNUSED) {
 
 	struct page *p = hash_entry(p_, struct page, hash_elem);
 	vm_dealloc_page(p);
@@ -522,9 +531,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-
-	 hash_destroy(&spt->pages, page_destroy);
-
+	hash_clear(&spt->pages, hash_page_destroy);
 }
 
 /*

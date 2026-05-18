@@ -94,6 +94,7 @@ syscall_init (void) {
 /* 주 시스템 콜 인터페이스. */
 void
 syscall_handler (struct intr_frame *f) {
+	thread_current()->rsp = (void *)f->rsp;
 	struct syscall_entry entry;
 
 	init_syscall_entry (f, &entry);
