@@ -243,8 +243,15 @@ bool
 vm_try_handle_fault (struct intr_frame *f, void *addr,
 		bool user UNUSED, bool write, bool not_present UNUSED) {
 	//printf("[handler 들어왔나요?]\n");
+	uintptr_t *rsp;
+	if (user){
+		rsp = f->rsp;
+	}else{
+		rsp = (uintptr_t)thread_current()->rsp;
+	}
 
-	if(is_kernel_vaddr(addr)){
+	if (is_kernel_vaddr(addr))
+	{
 		//printf("[혹시 여기에요?]\n");
 		return false;
 	}
@@ -279,7 +286,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			따라서 addr이 rsp - 8 ~ rsp 사이에 있을 때 stack_growth 를 수행 하면 되지 않을까?
 		*/
 		//printf("[spt에 page가 없나요?]\n");
-		if (addr >= f->rsp - STACK_RANGE)
+		if (addr >= rsp - STACK_RANGE)
 		{
 			// stack을 늘려야 할 경우에는 vm_sg 함수 호출
 			//printf("[스택을 늘려야 합니까?]\n");
