@@ -60,7 +60,9 @@ static void handle_write (struct intr_frame *, struct syscall_entry *);
 static void handle_seek (struct syscall_entry *);
 static void handle_tell (struct syscall_entry *);
 static void handle_close (struct syscall_entry *);
-static void *get_next_page_if_valid (void *);
+static void handle_mmap(struct syscall_entry *entry);
+static void handle_munmap(struct syscall_entry *entry);
+static void *get_next_page_if_valid(void *);
 static bool is_valid_user_buffer (struct intr_frame *, void *, size_t, bool);
 static bool is_valid_user_buffer_page (struct intr_frame *, void *, bool);
 static bool is_valid_user_string (char *);
@@ -481,11 +483,10 @@ handle_mmap (struct syscall_entry *entry) {
 
 }
 
-
-
 static void
 handle_munmap (struct syscall_entry *entry) {
-
+	void *addr = (void *)entry->args[0];
+	do_munmap(addr);
 }
 static bool
 is_valid_user_buffer (struct intr_frame *f, void *buf, size_t size, bool write) {
