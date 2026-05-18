@@ -434,7 +434,7 @@ handle_tell (struct syscall_entry *entry) {
 
 	entry->should_return_value = true;
 
-	if (fd < 2 || fd >= FD_MAX || curr->fd_table[fd] == NULL) {
+	if (fd < 2 || fd >= FD_MAX || curr->fd_table[fd] == NULL){
 		entry->return_value = -1;
 		return;
 	}
@@ -475,7 +475,7 @@ handle_mmap (struct syscall_entry *entry) {
 	entry->should_return_value = true;
 
 	if (fd < 2 || fd >= FD_MAX || curr->fd_table[fd] == NULL) {
-		entry->return_value = -1;
+		entry->return_value = NULL;
 		return;
 	}
 

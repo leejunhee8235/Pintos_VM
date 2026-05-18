@@ -31,6 +31,12 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &file_ops;
 
 	struct file_page *file_page = &page->file;
+	file_page->file = NULL;
+	file_page->offset = 0;
+	file_page->read_bytes = 0;
+	file_page->zero_bytes = 0;
+
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -53,8 +59,8 @@ file_backed_destroy (struct page *page) {
 
 	// 1. dirty page이면 파일에 다시 기록
 	if (frame != NULL && pml4_is_dirty(thread_current()->pml4, page->va)) {
-		// 파일에 다시 기록 -> 근데 궁금한게 다 뿌시고 지울건데 바뀐거 기록 왜함 -> 메모리에서만 지우는거지 파일 변경은 보존해야하니까... 
-		// mmap은 파일을 메모리에 붙여 놓고 쓰는 기능 
+		// 파일에 다시 기록 -> 근데 궁금한게 다 뿌시고 지울건데 바뀐거 기록 왜함 -> 메모리에서만 지우는거지 파일 변경은 보존해야하니까...
+		// mmap은 파일을 메모리에 붙여 놓고 쓰는 기능
 
 		file_write_at (file_page->file, frame->kva, file_page->read_bytes, file_page->offset); 
 	}
@@ -90,6 +96,12 @@ static bool
 lazy_load_file_page(struct page *page, void *aux)
 {
 	struct file_page *info = aux;
+
+	page->file.file = info->file;
+	page->file.offset = info->offset;
+	page->file.read_bytes = info->read_bytes;
+	page->file.zero_bytes = info->zero_bytes;
+
 	file_seek(info->file, info->offset);
 	off_t read_byte = file_read(info->file, page->frame->kva, info->read_bytes);
 
@@ -101,14 +113,15 @@ lazy_load_file_page(struct page *page, void *aux)
 }
 /* Do the mmap */
 void *
-do_mmap (void *addr, size_t length, int writable,
-		struct file *file, off_t offset) {
+do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offset) {
+	struct file *reopned_file = file_reopen(file);
+
 	void *start_addr = addr;
 	struct thread *cur = thread_current();
 	// 실패할 조건
 	// printf("[do_mmap] addr=%p length=%zu writable=%d file=%p offset=%d\n",
 	// 	   addr, length, writable, file, offset);
-	off_t length_file = file_length(file);
+	off_t length_file = file_length(reopned_file);
 	if (length_file == 0 || pg_round_down(addr) != addr || addr == 0 || length == 0 || offset < 0 || (offset % PGSIZE) != 0){
 		return NULL;
 	}
@@ -123,7 +136,7 @@ do_mmap (void *addr, size_t length, int writable,
 	// 매핑 하려는 페이지 범위를 어떻게 받아올까?
 	// addr이 매핑하려는 공간의 시작 주소
 	// length만큼 읽어야하니까 addr + length?
-
+	
 	int page_count = (length / PGSIZE);
 	if((length % PGSIZE) != 0){
 		page_count += 1;
@@ -131,21 +144,19 @@ do_mmap (void *addr, size_t length, int writable,
 	//spt_find_page();
 	// mmap(0x0004000, 6000, 1, fd, 0);
 	// length + addr 이 가능한가?
-	struct file_page *file_info = malloc(sizeof(struct file_page));
-
-	while (page_count > 0)
-	{
+	while (page_count > 0){
+		struct file_page *file_info = malloc(sizeof(struct file_page));
 		//printf("[test]addr : %p", addr);
 		if (spt_find_page(&cur->spt, addr) || addr > &cur->rsp){
 			return NULL;
 		}
 
-		file_info->file = file;
+		file_info->file = reopned_file;
 		file_info->offset = offset;
 		file_info->read_bytes = length >= PGSIZE ? PGSIZE : length;
 		file_info->zero_bytes = PGSIZE - file_info->read_bytes;
-		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_page, file_info))
-		{
+
+		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_page, file_info)){
 			return NULL;
 		}
 		// 스택 영역의 가장 끝 주소를 어떻게 얻어올까?
@@ -176,10 +187,18 @@ do_munmap (void *addr) {
 	}
 	// 매핑된 정보가 있다.
 	// 해당 file에 있는 모든 매핑된 page들을 해제해야하니까 반복문을 돌면서 해제를 해줘야한다.
-	while (page != NULL && VM_TYPE(page->operations->type) == VM_FILE){
+	while (page != NULL){
+		struct file_page *file_page = &page->file;
+		// printf("[page1 타입] : %d\n", VM_TYPE(page->operations->type));
+		// printf("[여기]\n");
+		if (pml4_is_dirty(cur->pml4, addr)){
+			//printf("[변경된거 확인]\n");
+			file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
+		}
 		spt_remove_page(&cur->spt, page);
-		file_backed_destroy(page);
+		
 		addr = pg_next(addr);
 		page = spt_find_page(&cur->spt, addr);
+		//printf("[page2 타입] : %d\n", VM_TYPE(page->operations->type));
 	}
 }
