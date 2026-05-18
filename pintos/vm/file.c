@@ -122,7 +122,26 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	// printf("[do_mmap] addr=%p length=%zu writable=%d file=%p offset=%d\n",
 	// 	   addr, length, writable, file, offset);
 	off_t length_file = file_length(reopned_file);
-	if (length_file == 0 || pg_round_down(addr) != addr || addr == 0 || length == 0 || offset < 0 || (offset % PGSIZE) != 0){
+	//printf("[파일 길이] : %d\n", length_file);
+
+	if (pg_round_down(addr) != addr || addr == 0 || offset < 0 || (offset % PGSIZE) != 0)
+	{
+		file_close(reopned_file);
+		return NULL;
+	}
+	
+	if (length == 0)
+	{
+		return NULL;
+	}
+
+	// printf("[addr 의 범위?] : %p\n", addr);
+	// printf("[length] : %zu \n", length);
+	// printf("[addr + length 가능?] %p \n",(uint8_t)addr + length);
+
+	if (!is_user_vaddr(addr) || !is_user_vaddr((uint8_t)addr + length)){
+		//printf("[유저 영역인가?]\n", is_user_vaddr(addr));
+		file_close(reopned_file);
 		return NULL;
 	}
 	/*
@@ -162,6 +181,7 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 		// 스택 영역의 가장 끝 주소를 어떻게 얻어올까?
 		addr = pg_next(addr);
 		length -= PGSIZE;
+		offset += PGSIZE;
 		page_count--;
 	}
 	// 매핑하려는 페이지 범위가 이미 존재하는 매핑된 페이지와 겹치는 경우 실패
