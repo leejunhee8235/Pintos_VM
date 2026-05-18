@@ -3,6 +3,7 @@
 #include "vm/vm.h"
 #include "threads/thread.h"
 #include "threads/mmu.h"
+#include "filesys/file.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -79,17 +80,34 @@ file_backed_destroy (struct page *page) {
     // size_t read_bytes;
     // size_t zero_bytes;
 	// file_page가 struct page 안의 union 멤버라서, 마지막에 vm_dealloc_page()가 struct page 자체를 free(page) 해버리고 안에 있던 위 정보들은 같이 사라지므로 NULL, 0으로 만들 필요 없음 
-
-
-	// file 포인터가 가리키는 실제 file 객체를 닫아야 한다는게 대체 무슨소리임
-	// file back 더 공부하고 구현하기 
-
+	
+	파일.... close(fd) 하라는거 아니야? file 포인터가 가리키는 실제 file 객체를 닫아야 함 
+	remove로 파일 이름 제거도 해야되나요? 
 }
 
 /* Do the mmap */
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+
+	// 실패할 조건
+	off_t length_file = file_length (file);
+	if (length_file == 0 || pg_round_down(addr) != addr || addr == 0 || length == 0 || offset <= 0)
+		return NULL;
+	// fd로 열린 파일의 길이가 0 bytes이면 실패 size? 파일의 length를 따로 얻어올 수 있나? 
+	// addr가 page aligned 아니면 실패 
+	// addr이 0인 경우 실패
+	// length가 0인 경우 실패
+	// offset이 0보다 작은 경우 
+
+	// 매핑하려는 페이지 범위가 이미 존재하는 매핑된 페이지와 겹치는 경우 실패 
+	// 스택 영역과 겹치는 경우 실패
+
+	fd로 열린 파일에 offset에서 시작한 위치부터 length bytes 만큼을 vm에 올리는 것 -> 이 위치가 addr부터 시작 
+	최종적으로 호출해야하는 함수? SPT에 올리는 것이므로 vm_alloc_page_with_initializer 을 호출해야 할 것 
+	
+	
+	
 }
 
 /* Do the munmap */

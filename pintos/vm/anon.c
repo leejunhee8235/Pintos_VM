@@ -8,6 +8,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/mmu.h"
+#include "threads/malloc.h"
 
 
 #define SECTORS_PER_PAGE (PGSIZE / DISK_SECTOR_SIZE)
@@ -72,14 +73,38 @@ anon_swap_in (struct page *page, void *kva) {
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
-	(void) page;
-
 	// 메모리의 내용을 디스크로 복사하여 익명 페이지(anonymous page)를 스왑 디스크(swap disk)로 스왑 아웃(swap out)합니다. 
 	// 먼저 스왑 테이블(swap table)을 사용해 디스크에서 비어 있는 스왑 슬롯(swap slot)을 찾은 다음, 
 	// 데이터 페이지를 해당 슬롯에 복사합니다. 데이터의 위치는 page 구조체에 저장되어야 합니다. 
 	// 디스크에 더 이상 비어 있는 슬롯이 없으면 커널 패닉(kernel panic)을 발생시킬 수 있습니다. -> swap table이 모두 true면 kernel panic 발생 
-	// TODO: 실제 swap-out 로직 구현 전까지는 실패를 명확히 반환한다.
-	return false;
+	struct anon_page *anon_page = &page->anon;
+	struct frame *frame = page->frame;
+	uint8_t *kva = frame->kva;
+
+	lock_acquire (&swap_lock);
+	size_t slot = bitmap_scan_and_flip (swap_table, 0, 1, false);
+	lock_release (&swap_lock);
+
+	if (slot == BITMAP_ERROR) {
+		PANIC ("no free swap slot");
+	}
+
+	anon_page->swap_slot = slot;
+
+	disk_sector_t sector = slot * SECTORS_PER_PAGE;
+	for (size_t i = 0; i < SECTORS_PER_PAGE; i++) {
+		disk_write (swap_disk, sector + i, kva + i * DISK_SECTOR_SIZE);
+	}
+
+	pml4_clear_page (thread_current ()->pml4, page->va);
+
+	frame->page = NULL;
+	page->frame = NULL;
+
+	palloc_free_page (frame->kva);
+	free (frame);
+
+	return true;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
