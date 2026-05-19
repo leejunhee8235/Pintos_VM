@@ -78,32 +78,6 @@ anon_swap_out (struct page *page) {
 	// 데이터 페이지를 해당 슬롯에 복사합니다. 데이터의 위치는 page 구조체에 저장되어야 합니다. 
 	// 디스크에 더 이상 비어 있는 슬롯이 없으면 커널 패닉(kernel panic)을 발생시킬 수 있습니다. -> swap table이 모두 true면 kernel panic 발생 
 	struct anon_page *anon_page = &page->anon;
-	struct frame *frame = page->frame;
-	uint8_t *kva = frame->kva;
-
-	lock_acquire (&swap_lock);
-	size_t slot = bitmap_scan_and_flip (swap_table, 0, 1, false);
-	lock_release (&swap_lock);
-
-	if (slot == BITMAP_ERROR) {
-		PANIC ("no free swap slot");
-	}
-
-	anon_page->swap_slot = slot;
-
-	disk_sector_t sector = slot * SECTORS_PER_PAGE;
-	for (size_t i = 0; i < SECTORS_PER_PAGE; i++) {
-		disk_write (swap_disk, sector + i, kva + i * DISK_SECTOR_SIZE);
-	}
-
-	pml4_clear_page (thread_current ()->pml4, page->va);
-
-	frame->page = NULL;
-	page->frame = NULL;
-
-	palloc_free_page (frame->kva);
-	free (frame);
-
 	return true;
 }
 
