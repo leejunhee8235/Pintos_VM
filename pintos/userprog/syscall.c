@@ -60,7 +60,9 @@ static void handle_write (struct intr_frame *, struct syscall_entry *);
 static void handle_seek (struct syscall_entry *);
 static void handle_tell (struct syscall_entry *);
 static void handle_close (struct syscall_entry *);
-static void *get_next_page_if_valid (void *);
+static void handle_mmap(struct syscall_entry *entry);
+static void handle_munmap(struct syscall_entry *entry);
+static void *get_next_page_if_valid(void *);
 static bool is_valid_user_buffer (struct intr_frame *, void *, size_t, bool);
 static bool is_valid_user_buffer_page (struct intr_frame *, void *, bool);
 static bool is_valid_user_string (char *);
@@ -94,7 +96,6 @@ syscall_init (void) {
 /* 주 시스템 콜 인터페이스. */
 void
 syscall_handler (struct intr_frame *f) {
-	thread_current()->rsp = (void *)f->rsp;
 	struct syscall_entry entry;
 
 	init_syscall_entry (f, &entry);
@@ -162,6 +163,12 @@ dispatch_syscall (struct intr_frame *f, struct syscall_entry *entry) {
 			break;
 		case SYS_CLOSE:
 			handle_close (entry);
+			break;
+		case SYS_MMAP:
+			handle_mmap (entry); 
+			break;
+		case SYS_MUNMAP:
+			handle_munmap (entry);
 			break;
 		default:
 			ASSERT (false); /* 현재 처리할 수 없는 syscall */
@@ -427,7 +434,7 @@ handle_tell (struct syscall_entry *entry) {
 
 	entry->should_return_value = true;
 
-	if (fd < 2 || fd >= FD_MAX || curr->fd_table[fd] == NULL) {
+	if (fd < 2 || fd >= FD_MAX || curr->fd_table[fd] == NULL){
 		entry->return_value = -1;
 		return;
 	}
@@ -450,6 +457,37 @@ handle_close (struct syscall_entry *entry) {
 	return;
 }
 
+static void
+handle_mmap (struct syscall_entry *entry) {
+	// do_mmap (void *addr, size_t length, int writable,
+	// 	struct file *file, off_t offset) 
+
+	struct thread *curr = thread_current();
+
+	void *addr = (void *) entry->args[0];
+	size_t length = (size_t) entry->args[1];
+	int writable = (int) entry->args[2];
+	int fd = (int) entry->args[3];
+	off_t offset = (off_t) entry->args[4];
+
+	
+	
+	entry->should_return_value = true;
+
+	if (fd < 2 || fd >= FD_MAX || curr->fd_table[fd] == NULL) {
+		entry->return_value = NULL;
+		return;
+	}
+
+	entry->return_value = do_mmap(addr, length, writable, curr->fd_table[fd], offset);
+
+}
+
+static void
+handle_munmap (struct syscall_entry *entry) {
+	void *addr = (void *)entry->args[0];
+	do_munmap(addr);
+}
 static bool
 is_valid_user_buffer (struct intr_frame *f, void *buf, size_t size, bool write) {
 	uint8_t *p = buf;
