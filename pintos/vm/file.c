@@ -166,7 +166,8 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	while (page_count > 0){
 		struct file_page *file_info = malloc(sizeof(struct file_page));
 		//printf("[test]addr : %p", addr);
-		if (spt_find_page(&cur->spt, addr) || addr > &cur->rsp){
+		if (spt_find_page(&cur->spt, addr)){
+			file_close(reopned_file);
 			return NULL;
 		}
 
