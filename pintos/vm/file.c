@@ -80,17 +80,6 @@ file_backed_destroy (struct page *page) {
 		page->frame = NULL;
 		free(frame);
 	}
-
-	// 3. file-backed 정보 정리
-
-	// struct file *file;
-    // off_t ofs;
-    // size_t read_bytes;
-    // size_t zero_bytes;
-	// file_page가 struct page 안의 union 멤버라서, 마지막에 vm_dealloc_page()가 struct page 자체를 free(page) 해버리고 안에 있던 위 정보들은 같이 사라지므로 NULL, 0으로 만들 필요 없음 
-	
-	// 파일.... close(fd) 하라는거 아니야? file 포인터가 가리키는 실제 file 객체를 닫아야 함 
-	// remove로 파일 이름 제거도 해야되나요? 
 }
 static bool
 lazy_load_file_page(struct page *page, void *aux)
@@ -121,9 +110,9 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	// 실패할 조건
 	// printf("[do_mmap] addr=%p length=%zu writable=%d file=%p offset=%d\n",
 	// 	   addr, length, writable, file, offset);
-	off_t length_file = file_length(reopned_file);
+	// off_t length_file = file_length(reopned_file);
 	//printf("[파일 길이] : %d\n", length_file);
-
+	// printf("여기까지?\n");
 	if (pg_round_down(addr) != addr || addr == 0 || offset < 0 || (offset % PGSIZE) != 0)
 	{
 		file_close(reopned_file);
@@ -134,16 +123,18 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	{
 		return NULL;
 	}
-
+	
 	// printf("[addr 의 범위?] : %p\n", addr);
+	// printf("[addr 변환?]: %zu\n", (size_t)addr);
 	// printf("[length] : %zu \n", length);
-	// printf("[addr + length 가능?] %p \n",(uint8_t)addr + length);
+	// printf("[addr + length hex]  0x%lx \n", (size_t)addr + length);
 
-	if (!is_user_vaddr(addr) || !is_user_vaddr((uint8_t)addr + length)){
-		//printf("[유저 영역인가?]\n", is_user_vaddr(addr));
-		file_close(reopned_file);
-		return NULL;
-	}
+	if (!is_user_vaddr(addr) || !is_user_vaddr((size_t)addr + length) || ((size_t)addr + length) < addr)
+		{
+			// printf("[유저 영역인가?]\n", is_user_vaddr(addr));
+			file_close(reopned_file);
+			return NULL;
+		}
 	/*
 		fd로 열린 파일의 길이가 0 bytes이면 실패 size? 파일의 length를 따로 얻어올 수 있나?
 		addr가 page aligned 아니면 실패
@@ -163,9 +154,11 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	//spt_find_page();
 	// mmap(0x0004000, 6000, 1, fd, 0);
 	// length + addr 이 가능한가?
-	while (page_count > 0){
+	//printf("[pagecount] : %d", page_count);
+	while (page_count > 0)
+	{
 		struct file_page *file_info = malloc(sizeof(struct file_page));
-		//printf("[test]addr : %p", addr);
+		//printf("[test]addr : %p\n", addr);
 		if (spt_find_page(&cur->spt, addr)){
 			file_close(reopned_file);
 			return NULL;
@@ -175,7 +168,7 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 		file_info->offset = offset;
 		file_info->read_bytes = length >= PGSIZE ? PGSIZE : length;
 		file_info->zero_bytes = PGSIZE - file_info->read_bytes;
-
+	
 		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_page, file_info)){
 			return NULL;
 		}
@@ -190,6 +183,7 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	
 	// fd로 열린 파일에 offset에서 시작한 위치부터 length bytes 만큼을 vm에 올리는 것 -> 이 위치가 addr부터 시작 
 	// 최종적으로 호출해야하는 함수? SPT에 올리는 것이므로 vm_alloc_page_with_initializer 을 호출해야 할 것
+	// printf("오나요?\n");
 	return start_addr;
 };
 
@@ -212,10 +206,10 @@ do_munmap (void *addr) {
 		struct file_page *file_page = &page->file;
 		// printf("[page1 타입] : %d\n", VM_TYPE(page->operations->type));
 		// printf("[여기]\n");
-		if (pml4_is_dirty(cur->pml4, addr)){
-			//printf("[변경된거 확인]\n");
-			file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
-		}
+		// if (pml4_is_dirty(cur->pml4, addr)){
+		// 	//printf("[변경된거 확인]\n");
+		// 	file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
+		// }
 		spt_remove_page(&cur->spt, page);
 		
 		addr = pg_next(addr);
