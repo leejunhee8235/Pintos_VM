@@ -6,13 +6,14 @@
 #include "vm/inspect.h"
 #include "threads/vaddr.h"
 #include "string.h"
-
+static struct list frame_lists;
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
+	list_init (&frame_lists);
 #ifdef EFILESYS  /* For project 4 */
 	pagecache_init ();
 #endif
@@ -20,7 +21,7 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 }
-
+static int NOW_LRU = 0;
 /* Get the type of the page. This function is useful if you want to know the
  * type of the page after it will be initialized.
  * This function is fully implemented now. */
@@ -33,6 +34,15 @@ page_get_type (struct page *page) {
 		default:
 			return ty;
 	}
+}
+
+static bool frame_align(const struct list_elem *a, const struct list_elem *b,
+		void *aux UNUSED) {
+	const struct frame *ta = list_entry (a, struct frame, frame_elem);
+	const struct frame *tb = list_entry (b, struct frame, frame_elem);
+
+	/* 같은 priority는 false를 반환해서 기존 항목 뒤에 간다. */
+	return ta->LRU > tb->LRU;
 }
 
 /* Helpers */
@@ -172,6 +182,32 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
+	struct list_elem *e;
+	
+	bool success = false;
+	while(!success)
+	{
+		e = list_begin (&frame_lists);
+		while (e != list_end (&frame_lists)) {
+			struct frame *f = list_entry (e, struct frame, frame_elem);
+
+			if(pml4_is_accessed(f->page->owner->pml4, f->page->va))
+			{
+				pml4_set_accessed(f->page->owner->pml4, f->page->va, false);
+				e = list_next(e);
+				continue;
+			}
+			
+
+			victim = f;
+			success = true;
+			break;
+			
+		}
+	}
+
+
+
 	 /* TODO: The policy for eviction is up to you. */
 
 	return victim;
@@ -183,7 +219,7 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-
+	swap_out(victim->page);
 	return NULL;
 }
 
@@ -204,13 +240,16 @@ vm_get_frame (void) {
 		return NULL;
 	}
 	frame->kva = palloc_get_page(PAL_USER);
+	
 	if (frame->kva == NULL) {
 		free(frame);
-		// vm_evict_frame();
-		PANIC("todo:eviction");
+		vm_evict_frame();
+		//PANIC("todo:eviction");
 		return NULL;
 	}
-	
+
+	frame->LRU = NOW_LRU++;
+	list_insert_ordered (&frame_lists, &frame->frame_elem, frame_align, NULL);
 	frame->page = NULL;
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -343,7 +382,7 @@ vm_claim_page (void *va) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
-	struct thread *t = thread_current();
+	struct thread *t = thread_current ();
 	
 	if (frame == NULL)
 		return false;
@@ -375,6 +414,9 @@ vm_do_claim_page (struct page *page) {
 		free(frame);
 		return false;
 	}
+
+	page->owner = thread_current();
+
 
 	return true;
 }
