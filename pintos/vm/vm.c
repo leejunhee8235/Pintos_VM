@@ -42,7 +42,7 @@ static bool frame_align(const struct list_elem *a, const struct list_elem *b,
 	const struct frame *tb = list_entry (b, struct frame, frame_elem);
 
 	/* 같은 priority는 false를 반환해서 기존 항목 뒤에 간다. */
-	return ta->LRU > tb->LRU;
+	return ta->LRU < tb->LRU;
 }
 
 /* Helpers */
@@ -179,37 +179,38 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 }
 
 /* Get the struct frame, that will be evicted. */
+
+
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	struct list_elem *e;
 	
-	bool success = false;
-	while(!success)
-	{
-		e = list_begin (&frame_lists);
-		while (e != list_end (&frame_lists)) {
+	e = list_begin (&frame_lists);
+	while (e != list_end (&frame_lists)) {
 			struct frame *f = list_entry (e, struct frame, frame_elem);
 
-			if(pml4_is_accessed(f->page->owner->pml4, f->page->va))
+			if(pml4_is_accessed(f->page->owner->pml4, f->page->va) == true)
 			{
+				f->LRU = NOW_LRU++;
 				pml4_set_accessed(f->page->owner->pml4, f->page->va, false);
-				e = list_next(e);
+				
 				continue;
 			}
+			e = list_next(e);
 			
-
-			victim = f;
-			success = true;
-			break;
-			
-		}
 	}
-
-
-
+	e = list_begin (&frame_lists);
+	victim = list_entry (e, struct frame, frame_elem);
+	while (e != list_end (&frame_lists)) {
+		struct frame *f = list_entry (e, struct frame, frame_elem);
+		if ( victim->LRU > f->LRU )
+		{
+			victim = f;
+		}
+		e = list_next(e);
+	}
 	 /* TODO: The policy for eviction is up to you. */
-
 	return victim;
 }
 
@@ -217,10 +218,11 @@ vm_get_victim (void) {
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
+	struct frame *victim = vm_get_victim ();
+	//printf("실행이 되긴함??\n");
 	/* TODO: swap out the victim and return the evicted frame. */
 	swap_out(victim->page);
-	return NULL;
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -231,24 +233,31 @@ vm_evict_frame (void) {
 */
 static struct frame *
 vm_get_frame (void) {
+	
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 	/* frame 메타데이터를 먼저 만들고, 실제 내용을 담을 4KB user pool
 	 * 페이지를 frame->kva에 연결한다. */
 	frame = malloc(sizeof *frame);
+	
 	if (frame == NULL) {
 		return NULL;
 	}
+	
 	frame->kva = palloc_get_page(PAL_USER);
 	
 	if (frame->kva == NULL) {
-		free(frame);
-		vm_evict_frame();
-		//PANIC("todo:eviction");
-		return NULL;
+		
+		frame = vm_evict_frame();
+		pml4_clear_page(frame->page->owner->pml4, frame->page->va);
+		//frame->page = NULL;
+		//palloc_free_page(frame->kva);
+
+		list_remove(&frame->frame_elem);
+		
 	}
 
-	frame->LRU = NOW_LRU++;
+	
 	list_insert_ordered (&frame_lists, &frame->frame_elem, frame_align, NULL);
 	frame->page = NULL;
 	ASSERT (frame != NULL);
@@ -311,6 +320,7 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		spt_find_page() 를 호출하고 만약 spt에도 없으면 stack_growth 검사를 해야 함
 		근데 spt에 있으면 vm_do_claim_page로 pml4에 매핑 시켜 주면 된다.
 	*/
+	//printf("왜터짐??, %d\n", page->va);
 	if(page == NULL){
 		/*
 			이 경우 spt에도 page가 없는 상황이다.

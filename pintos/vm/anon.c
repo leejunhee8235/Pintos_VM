@@ -55,7 +55,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops; 	// 이 페이지의 operation table을 익명 페이지용 handler 묶음으로 바꾼다.
 
 	struct anon_page *anon_page = &page->anon;
-	
+
 	anon_page->swap_slot = BITMAP_ERROR;   // 아직 swap disk에 저장된 위치가 없음
 	memset (kva, 0, PGSIZE); // kva가 가리키는 4KB 물리 프레임 전체를 0으로 채움 
 
@@ -79,10 +79,9 @@ anon_swap_in (struct page *page, void *kva) {
 	}
 	for(int i = 0 ; i < 8 ; i++ )
 	{
-		disk_read(swap_disk, page_idx + i, (uint8_t *)page->frame->kva + i * DISK_SECTOR_SIZE);
-		
+		disk_read(swap_disk, page_idx * 8  + i, (uint8_t *)page->frame->kva + i * DISK_SECTOR_SIZE);
 	}
-	page->anon.swap_slot = -1;
+	page->anon.swap_slot = BITMAP_ERROR;
 
 	return true;
 }
@@ -107,11 +106,10 @@ anon_swap_out (struct page *page) {
 	}
 	for(int i = 0 ; i < 8 ; i++ )
 	{
-		disk_write(swap_disk, page_idx + i, (uint8_t *)page->frame->kva + i * DISK_SECTOR_SIZE);
+		disk_write(swap_disk, page_idx * 8 + i, (uint8_t *)page->frame->kva + i * DISK_SECTOR_SIZE);
 	}
-
-
 	page->anon.swap_slot = page_idx;
+	page->frame = NULL;
 	return true;
 }
 

@@ -43,12 +43,17 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page = &page->file;
+	
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page = &page->file;
+	if( pml4_is_dirty(page->owner, page->va) )
+	{
+		
+	}
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
