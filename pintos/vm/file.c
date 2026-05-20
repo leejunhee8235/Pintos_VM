@@ -82,7 +82,7 @@ file_backed_destroy (struct page *page) {
 
 	// 2. frame 해제
 	if (frame != NULL) {
-
+		list_remove(&frame->frame_elem);
 		if (thread_current()->pml4 != NULL) {
 			pml4_clear_page(thread_current()->pml4, page->va);
 		}

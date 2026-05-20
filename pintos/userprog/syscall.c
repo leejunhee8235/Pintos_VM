@@ -522,6 +522,14 @@ is_valid_user_buffer_page (struct intr_frame *f, void *ptr, bool write) {
 
 	upage = pg_round_down (ptr);
 	if (pml4_get_page (thread_current ()->pml4, upage) != NULL) {
+#ifdef VM
+		struct page *page = spt_find_page (&thread_current ()->spt, upage);
+		if (page != NULL) {
+			if (write && !page->writable) {
+				return false;
+			}
+		}
+#endif
 		return true;
 	}
 

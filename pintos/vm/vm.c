@@ -194,7 +194,7 @@ vm_get_victim (void) {
 			{
 				f->LRU = NOW_LRU++;
 				pml4_set_accessed(f->page->owner->pml4, f->page->va, false);
-				
+				e = list_next(e);
 				continue;
 			}
 			e = list_next(e);
@@ -247,7 +247,7 @@ vm_get_frame (void) {
 	frame->kva = palloc_get_page(PAL_USER);
 	
 	if (frame->kva == NULL) {
-		
+		free(frame);
 		frame = vm_evict_frame();
 		pml4_clear_page(frame->page->owner->pml4, frame->page->va);
 		//frame->page = NULL;
@@ -257,7 +257,7 @@ vm_get_frame (void) {
 		
 	}
 
-	
+	frame->LRU = NOW_LRU++;
 	list_insert_ordered (&frame_lists, &frame->frame_elem, frame_align, NULL);
 	frame->page = NULL;
 	ASSERT (frame != NULL);
@@ -409,6 +409,7 @@ vm_do_claim_page (struct page *page) {
 	if (!pml4_set_page(t->pml4, page->va, frame->kva, page->writable)) {
 		page->frame = NULL;
 		frame->page = NULL;
+		list_remove(&frame->frame_elem);
 		palloc_free_page(frame->kva);
 		free(frame);
 		return false;
@@ -420,6 +421,7 @@ vm_do_claim_page (struct page *page) {
 		pml4_clear_page(t->pml4, page->va);
 		page->frame = NULL;
 		frame->page = NULL;
+		list_remove(&frame->frame_elem);
 		palloc_free_page(frame->kva);
 		free(frame);
 		return false;

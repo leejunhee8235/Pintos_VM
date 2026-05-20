@@ -135,7 +135,7 @@ anon_destroy (struct page *page) {
 		if (frame->kva != NULL) {
 			palloc_free_page(frame->kva);
 		}
-
+		list_remove(&frame->frame_elem);
 		frame->page = NULL;
 		page->frame = NULL;
 		free(frame);
