@@ -61,6 +61,8 @@ struct page {
 	*/
 	struct hash_elem hash_elem;
 	bool writable;
+
+	struct thread *owner;
 	/* Your implementation */
 
 	/* Per-type data are binded into the union.
@@ -69,6 +71,7 @@ struct page {
 		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
+		
 #ifdef EFILESYS
 		struct page_cache page_cache;
 #endif
@@ -78,6 +81,8 @@ struct page {
 /* The representation of "frame" */
 struct frame {
 	void *kva;
+	int LRU;
+	struct list_elem frame_elem;
 	struct page *page;
 };
 

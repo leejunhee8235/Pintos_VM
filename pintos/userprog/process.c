@@ -339,6 +339,10 @@ process_exec (void *f_name) {
 	/* 먼저 현재 컨텍스트를 제거한다. */
 	process_cleanup ();
 
+	#ifdef VM
+	supplemental_page_table_init(&thread_current()->spt);
+	#endif
+
 	argc = parse_command_line (file_name, argv);
 	if (argc == -1) {
 		palloc_free_page (file_name);
