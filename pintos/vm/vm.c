@@ -265,6 +265,8 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 		write 권한 위반일 경우에는 process_exit()
 	*/
 	struct page *page = spt_find_page(spt, addr);
+	// printf("\n[page_fault 디버그] addr=%p rsp=%p user_stack=%p page=%p\n",
+	// 	   addr, rsp, USER_STACK, page);
 	// printf("[여기에요?]\n");
 	/*
 		권한 위반이 아닐경우에는 pml4에 매핑이 안되있는 경우
@@ -285,11 +287,11 @@ vm_try_handle_fault (struct intr_frame *f, void *addr,
 			디버그로 확인해본 결과, stack_growth 검사에서 스택을 늘려야 하는 범위는 스택 포인터 - 8 까지 인거같음.
 			따라서 addr이 rsp - 8 ~ rsp 사이에 있을 때 stack_growth 를 수행 하면 되지 않을까?
 		*/
-		//printf("[spt에 page가 없나요?]\n");
-		if (addr >= rsp - STACK_RANGE)
+		//printf("\n[spt에 page가 없습니다] not found\n");
+		if (addr >= rsp - STACK_RANGE && addr < USER_STACK)
 		{
 			// stack을 늘려야 할 경우에는 vm_sg 함수 호출
-			//printf("[스택을 늘려야 합니까?]\n");
+			//printf("\n[Stack Growth 조건에 들어왔음]\n\n");
 			vm_stack_growth(addr);
 			// printf("[addr] : %p\n", addr);
 			// printf("[rsp의 위치] : %p\n", f->rsp);

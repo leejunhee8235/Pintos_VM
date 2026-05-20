@@ -122,7 +122,10 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	// printf("[do_mmap] addr=%p length=%zu writable=%d file=%p offset=%d\n",
 	// 	   addr, length, writable, file, offset);
 	off_t length_file = file_length(reopned_file);
+	// printf("\n[mmap 디버그] addr=%p length=%zu file_len=%d offset=%d\n\n",
+	// 	   addr, length, length_file, offset);
 	if (length_file == 0 || pg_round_down(addr) != addr || addr == 0 || length == 0 || offset < 0 || (offset % PGSIZE) != 0){
+		//printf("[실패조건에 들어왔나요?]\n\n");
 		return NULL;
 	}
 	/*
@@ -191,12 +194,11 @@ do_munmap (void *addr) {
 		struct file_page *file_page = &page->file;
 		// printf("[page1 타입] : %d\n", VM_TYPE(page->operations->type));
 		// printf("[여기]\n");
-		if (pml4_is_dirty(cur->pml4, addr)){
-			//printf("[변경된거 확인]\n");
-			file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
-		}
+		// if (pml4_is_dirty(cur->pml4, addr)){
+		// 	//printf("[변경된거 확인]\n");
+		// 	file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
+		// }
 		spt_remove_page(&cur->spt, page);
-		
 		addr = pg_next(addr);
 		page = spt_find_page(&cur->spt, addr);
 		//printf("[page2 타입] : %d\n", VM_TYPE(page->operations->type));
